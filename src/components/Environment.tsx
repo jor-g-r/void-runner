@@ -112,7 +112,7 @@ export const Environment = () => {
       </instancedMesh>
 
       {/* Ambient fog — hide far-plane pop-in */}
-      <fog attach="fog" args={["#000011", 60, 110]} />
+      <fog attach="fog" args={["#000011", 80, 150]} />
     </>
   );
 };

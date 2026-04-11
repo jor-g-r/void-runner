@@ -1,15 +1,19 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import type { Mesh } from "three";
 import { useGameStore } from "../stores/gameStore";
 
-const BOUNDS_X = 9;
-const BOUNDS_Y = 4;
-const LERP_FACTOR = 0.07;
+const BOUNDS_X = 8.2;
+const BOUNDS_Y = 5;
+const LERP_FACTOR = 0.12;
 const TILT_LERP = 0.06;
 const MAX_BANK = 0.8;
 const MAX_PITCH = 0.4;
-const FIRE_RATE = 1 / 8; // 8 shots per second
+const FIRE_RATE = 1 / 8;
+const KEYBOARD_SPEED = 14; // units/sec — tuned to cross screen in ~1.2s
+
+// Track pressed keys outside React render cycle
+const keys = new Set<string>();
 
 export const Player = () => {
   const meshRef = useRef<Mesh>(null);
@@ -18,26 +22,70 @@ export const Player = () => {
   const currentX = useRef(0);
   const currentY = useRef(0);
   const fireTimer = useRef(0);
+  const usingKeyboard = useRef(false);
 
   const { viewport } = useThree();
   const setPlayerPosition = useGameStore((s) => s.setPlayerPosition);
   const fireProjectile = useGameStore((s) => s.firePlayerProjectile);
   const phase = useGameStore((s) => s.phase);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      keys.add(e.key.toLowerCase());
+      if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) {
+        usingKeyboard.current = true;
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      keys.delete(e.key.toLowerCase());
+    };
+    const onMouseMove = () => {
+      usingKeyboard.current = false;
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("mousemove", onMouseMove);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("mousemove", onMouseMove);
+      keys.clear();
+    };
+  }, []);
+
   useFrame((state, rawDelta) => {
     if (phase !== "playing" || !meshRef.current) return;
     const delta = Math.min(rawDelta, 0.1);
 
-    // Mouse position to world coordinates
-    const mouse = state.pointer;
-    targetX.current = (mouse.x * viewport.width) / 2;
-    targetY.current = (mouse.y * viewport.height) / 2;
+    // --- Input: keyboard moves target with velocity ---
+    const kbX =
+      (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
+      (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
+    const kbY =
+      (keys.has("w") || keys.has("arrowup") ? 1 : 0) -
+      (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
+
+    if (usingKeyboard.current) {
+      // Keyboard: velocity-based target movement
+      targetX.current += kbX * KEYBOARD_SPEED * delta;
+      targetY.current += kbY * KEYBOARD_SPEED * delta;
+    } else {
+      // Mouse: absolute target positioning
+      const mouse = state.pointer;
+      targetX.current = (mouse.x * viewport.width) / 2;
+      targetY.current = (mouse.y * viewport.height) / 2;
+
+      // WASD as fine adjustment on top of mouse
+      targetX.current += kbX * KEYBOARD_SPEED * delta;
+      targetY.current += kbY * KEYBOARD_SPEED * delta;
+    }
 
     // Clamp to bounds
     targetX.current = Math.max(-BOUNDS_X, Math.min(BOUNDS_X, targetX.current));
     targetY.current = Math.max(-BOUNDS_Y, Math.min(BOUNDS_Y, targetY.current));
 
-    // Lerp position
+    // Lerp position — same smoothing for both input methods
     currentX.current += (targetX.current - currentX.current) * LERP_FACTOR;
     currentY.current += (targetY.current - currentY.current) * LERP_FACTOR;
 
@@ -45,13 +93,13 @@ export const Player = () => {
     meshRef.current.position.x = currentX.current;
     meshRef.current.position.y = currentY.current;
 
-    // Bank tilt (roll when moving horizontally)
+    // Bank tilt
     const velocityX = targetX.current - currentX.current;
     const targetBank = -(velocityX / BOUNDS_X) * MAX_BANK;
     meshRef.current.rotation.z +=
       (targetBank - meshRef.current.rotation.z) * TILT_LERP;
 
-    // Pitch (tilt when moving vertically)
+    // Pitch tilt
     const velocityY = targetY.current - currentY.current;
     const targetPitch = (velocityY / BOUNDS_Y) * MAX_PITCH;
     meshRef.current.rotation.x +=
@@ -64,39 +112,29 @@ export const Player = () => {
     fireTimer.current -= delta;
     if (fireTimer.current <= 0) {
       fireTimer.current = FIRE_RATE;
-      // Twin lasers — offset slightly left and right
-      fireProjectile(currentX.current - 0.3, currentY.current);
-      fireProjectile(currentX.current + 0.3, currentY.current);
+      fireProjectile(currentX.current - 0.2, currentY.current);
+      fireProjectile(currentX.current + 0.2, currentY.current);
     }
   });
 
   return (
-    <mesh ref={meshRef} position={[0, 0, 0]}>
-      {/* Main body */}
+    <mesh ref={meshRef} position={[0, 0, 0]} scale={0.65}>
       <group>
-        {/* Fuselage */}
         <mesh>
           <coneGeometry args={[0.3, 1.2, 4]} />
           <meshStandardMaterial color="#4488ff" emissive="#2244aa" emissiveIntensity={0.5} />
         </mesh>
-        {/* Left wing */}
         <mesh position={[-0.6, 0, 0.2]} rotation={[0, 0, -0.3]}>
           <boxGeometry args={[0.8, 0.05, 0.4]} />
           <meshStandardMaterial color="#3366dd" emissive="#1133aa" emissiveIntensity={0.3} />
         </mesh>
-        {/* Right wing */}
         <mesh position={[0.6, 0, 0.2]} rotation={[0, 0, 0.3]}>
           <boxGeometry args={[0.8, 0.05, 0.4]} />
           <meshStandardMaterial color="#3366dd" emissive="#1133aa" emissiveIntensity={0.3} />
         </mesh>
-        {/* Engine glow */}
         <mesh position={[0, 0, 0.6]}>
-          <sphereGeometry args={[0.15, 8, 8]} />
-          <meshStandardMaterial
-            color="#00ccff"
-            emissive="#00ccff"
-            emissiveIntensity={2}
-          />
+          <sphereGeometry args={[0.12, 8, 8]} />
+          <meshStandardMaterial color="#00ccff" emissive="#00ccff" emissiveIntensity={2} />
         </mesh>
       </group>
     </mesh>

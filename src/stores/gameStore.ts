@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { GamePhase, ProjectileData } from "../types";
+import type { EnemyData, GamePhase, ProjectileData } from "../types";
 
 let nextProjectileId = 0;
 
@@ -17,11 +17,14 @@ interface GameState {
   chargeLevel: number;
   barrelRollCooldown: number;
 
+  enemies: EnemyData[];
   playerProjectiles: ProjectileData[];
 
   tick: (delta: number) => void;
   setPlayerPosition: (pos: [number, number]) => void;
   firePlayerProjectile: (x: number, y: number) => void;
+  spawnEnemy: (enemy: EnemyData) => void;
+  addScore: (points: number) => void;
   startGame: () => void;
   reset: () => void;
 }
@@ -38,6 +41,7 @@ const INITIAL_STATE = {
   isInvulnerable: false,
   chargeLevel: 0,
   barrelRollCooldown: 0,
+  enemies: [] as EnemyData[],
   playerProjectiles: [] as ProjectileData[],
 };
 
@@ -51,8 +55,8 @@ export const useGameStore = create<GameState>((set) => ({
         .map((p) => ({
           ...p,
           position: [
-            p.position[0],
-            p.position[1],
+            p.position[0] + p.velocity[0] * delta,
+            p.position[1] + p.velocity[1] * delta,
             p.position[2] + p.velocity[2] * delta,
           ] as [number, number, number],
           lifetime: p.lifetime - delta,
@@ -82,7 +86,20 @@ export const useGameStore = create<GameState>((set) => ({
       ],
     })),
 
-  startGame: () => set({ ...INITIAL_STATE, phase: "playing" }),
+  spawnEnemy: (enemy) =>
+    set((state) => ({
+      enemies: [...state.enemies, enemy],
+    })),
+
+  addScore: (points) =>
+    set((state) => ({
+      score: state.score + points,
+    })),
+
+  startGame: () => {
+    nextProjectileId = 0;
+    set({ ...INITIAL_STATE, phase: "playing" });
+  },
 
   reset: () => {
     nextProjectileId = 0;

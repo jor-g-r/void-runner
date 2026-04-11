@@ -1,5 +1,7 @@
 import { Player } from "./Player";
 import { ProjectileManager } from "./ProjectileManager";
+import { EnemyManager } from "./EnemyManager";
+import { Crosshair } from "./Crosshair";
 import { Environment } from "./Environment";
 import { useGameStore } from "../stores/gameStore";
 
@@ -20,6 +22,8 @@ export const Game = () => {
         <>
           <Player />
           <ProjectileManager />
+          <EnemyManager />
+          <Crosshair />
         </>
       )}
     </>
