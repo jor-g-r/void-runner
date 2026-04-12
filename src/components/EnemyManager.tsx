@@ -10,6 +10,10 @@ import type { EnemyData, EnemyType } from "../types";
 let nextEnemyId = 0;
 
 const TEST_SPAWN_INTERVAL = 2;
+const FIGHTER_STOP_Z = -15;
+const FIGHTER_FIRE_INTERVAL = 1.5;
+const TANK_CHARGE_TIME = 1.5;
+const TANK_STOP_Z = -20;
 
 interface ExplosionInstance {
   id: string;
@@ -31,8 +35,8 @@ export const EnemyManager = () => {
     const state = useGameStore.getState();
     if (state.phase !== "playing") return;
 
-    // Start from current enemies
     let enemies = [...state.enemies];
+    const [playerX, playerY] = state.playerPosition;
 
     // --- Spawn test enemies ---
     spawnTimer.current += delta;
@@ -41,6 +45,12 @@ export const EnemyManager = () => {
       const types: EnemyType[] = ["drone", "drone", "drone", "fighter", "tank"];
       const type = types[Math.floor(Math.random() * types.length)];
       const stats = ENEMY_STATS[type];
+
+      // Fighters get a random strafe factor:
+      // 1 = chase player directly, -1 = full mirror, values between = offset
+      const strafeFactor = type === "fighter"
+        ? (Math.random() < 0.5 ? 1 : -(0.6 + Math.random() * 0.4))
+        : undefined;
 
       enemies.push({
         id: `enemy-${nextEnemyId++}`,
@@ -57,6 +67,7 @@ export const EnemyManager = () => {
         stateTimer: 0,
         radius: stats.radius,
         flashTimer: 0,
+        strafeFactor,
       });
     }
 
@@ -72,9 +83,11 @@ export const EnemyManager = () => {
 
       for (const proj of projectiles) {
         if (hitProjectileIds.has(proj.id)) continue;
-        if (checkCollision(proj.position, 0.2, enemy.position, enemy.radius)) {
-          damage += 1;
-          hitProjectileIds.add(proj.id);
+        const projRadius = proj.isCharged ? (proj.radius ?? 1.5) : 0.2;
+        // Charged shots deal 5 damage
+        if (checkCollision(proj.position, projRadius, enemy.position, enemy.radius)) {
+          damage += proj.isCharged ? 5 : 1;
+          if (!proj.isCharged) hitProjectileIds.add(proj.id);
         }
       }
 
@@ -86,8 +99,74 @@ export const EnemyManager = () => {
         continue;
       }
 
-      // Move enemy forward (toward camera)
-      const newZ = enemy.position[2] + enemy.velocity[2] * delta;
+      // --- Enemy AI by type ---
+      let newState = enemy.state;
+      let newTimer = enemy.stateTimer + delta;
+      let newX = enemy.position[0];
+      let newY = enemy.position[1];
+      let newZ = enemy.position[2] + enemy.velocity[2] * delta;
+
+      if (enemy.type === "fighter") {
+        const sf = enemy.strafeFactor ?? 1;
+
+        if (newState === "approaching" && newZ >= FIGHTER_STOP_Z) {
+          newState = "attacking";
+          newTimer = 0;
+        }
+        if (newState === "attacking") {
+          // Stop forward movement
+          newZ = enemy.position[2];
+
+          // Strafe: chase (sf=1) goes toward player, mirror (sf=-1) goes opposite
+          const targetX = playerX * sf;
+          const dx = targetX - newX;
+          newX += Math.sign(dx) * 4 * delta;
+
+          // Clamp to playfield
+          newX = Math.max(-7, Math.min(7, newX));
+
+          // Fire at intervals — always aims at player regardless of strafe mode
+          if (newTimer >= FIGHTER_FIRE_INTERVAL) {
+            newTimer = 0;
+            const dirX = (playerX - newX) * 0.5;
+            const dirY = (playerY - newY) * 0.5;
+            const speed = 30;
+            state.fireEnemyProjectile(
+              [newX, newY, newZ],
+              [dirX * speed * 0.1, dirY * speed * 0.1, speed],
+            );
+          }
+        }
+      } else if (enemy.type === "tank") {
+        if (newState === "approaching" && newZ >= TANK_STOP_Z) {
+          newState = "charging";
+          newTimer = 0;
+        }
+        if (newState === "charging") {
+          // Stop forward movement
+          newZ = enemy.position[2];
+
+          if (newTimer >= TANK_CHARGE_TIME) {
+            newState = "attacking";
+            newTimer = 0;
+            // Fire wide beam — 5 projectiles in a horizontal spread
+            for (let i = -2; i <= 2; i++) {
+              state.fireEnemyProjectile(
+                [newX + i * 1.5, newY, newZ],
+                [i * 3, 0, 40],
+              );
+            }
+          }
+        }
+        if (newState === "attacking") {
+          newZ = enemy.position[2];
+          // Reset to charging after cooldown
+          if (newTimer >= 2) {
+            newState = "charging";
+            newTimer = 0;
+          }
+        }
+      }
 
       // Despawn if past camera
       if (newZ > 15) continue;
@@ -95,7 +174,9 @@ export const EnemyManager = () => {
       updatedEnemies.push({
         ...enemy,
         hp: newHp,
-        position: [enemy.position[0], enemy.position[1], newZ],
+        position: [newX, newY, newZ],
+        state: newState,
+        stateTimer: newTimer,
         flashTimer: damage > 0 ? 0.08 : Math.max(0, enemy.flashTimer - delta),
       });
     }
@@ -111,8 +192,9 @@ export const EnemyManager = () => {
       score: state.score + scoreGained,
     });
 
-    // Spawn explosions
+    // Spawn explosions + screen shake
     if (destroyedPositions.length > 0) {
+      state.requestShake(0.05, 0.1);
       setExplosions((prev) => [
         ...prev,
         ...destroyedPositions.map((pos) => ({

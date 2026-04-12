@@ -10,9 +10,10 @@ const TILT_LERP = 0.06;
 const MAX_BANK = 0.8;
 const MAX_PITCH = 0.4;
 const FIRE_RATE = 1 / 8;
-const KEYBOARD_SPEED = 14; // units/sec — tuned to cross screen in ~1.2s
+const KEYBOARD_SPEED = 14;
+const CHARGE_TIME = 1.0;
+const DOUBLE_TAP_WINDOW = 0.3;
 
-// Track pressed keys outside React render cycle
 const keys = new Set<string>();
 
 export const Player = () => {
@@ -23,22 +24,75 @@ export const Player = () => {
   const currentY = useRef(0);
   const fireTimer = useRef(0);
   const usingKeyboard = useRef(false);
+  const chargeHeld = useRef(false);
+  const chargeTime = useRef(0);
+  const barrelRollAngle = useRef(0);
+
+  // Double-tap detection for barrel roll
+  const lastTapA = useRef(0);
+  const lastTapD = useRef(0);
 
   const { viewport } = useThree();
   const setPlayerPosition = useGameStore((s) => s.setPlayerPosition);
   const fireProjectile = useGameStore((s) => s.firePlayerProjectile);
+  const fireCharged = useGameStore((s) => s.fireChargedShot);
+  const startBarrelRoll = useGameStore((s) => s.startBarrelRoll);
   const phase = useGameStore((s) => s.phase);
 
   useEffect(() => {
+    const now = () => performance.now() / 1000;
+
     const onKeyDown = (e: KeyboardEvent) => {
-      keys.add(e.key.toLowerCase());
-      if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) {
+      const key = e.key.toLowerCase();
+      if (keys.has(key)) return; // Ignore held repeats
+      keys.add(key);
+
+      if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
         usingKeyboard.current = true;
       }
+
+      // Double-tap A for barrel roll left
+      if (key === "a" || key === "arrowleft") {
+        const t = now();
+        if (t - lastTapA.current < DOUBLE_TAP_WINDOW) {
+          startBarrelRoll();
+        }
+        lastTapA.current = t;
+      }
+
+      // Double-tap D for barrel roll right
+      if (key === "d" || key === "arrowright") {
+        const t = now();
+        if (t - lastTapD.current < DOUBLE_TAP_WINDOW) {
+          startBarrelRoll();
+        }
+        lastTapD.current = t;
+      }
+
+      // Spacebar = start charging
+      if (key === " ") {
+        chargeHeld.current = true;
+        chargeTime.current = 0;
+      }
     };
+
     const onKeyUp = (e: KeyboardEvent) => {
-      keys.delete(e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      keys.delete(key);
+
+      // Spacebar release = fire charged shot if ready
+      if (key === " ") {
+        chargeHeld.current = false;
+        if (chargeTime.current >= CHARGE_TIME) {
+          const state = useGameStore.getState();
+          const [px, py] = state.playerPosition;
+          fireCharged(px, py);
+          state.requestShake(0.08, 0.15);
+        }
+        chargeTime.current = 0;
+      }
     };
+
     const onMouseMove = () => {
       usingKeyboard.current = false;
     };
@@ -52,13 +106,20 @@ export const Player = () => {
       window.removeEventListener("mousemove", onMouseMove);
       keys.clear();
     };
-  }, []);
+  }, [startBarrelRoll, fireCharged]);
 
   useFrame((state, rawDelta) => {
     if (phase !== "playing" || !meshRef.current) return;
     const delta = Math.min(rawDelta, 0.1);
+    const gameState = useGameStore.getState();
 
-    // --- Input: keyboard moves target with velocity ---
+    // --- Charge tracking ---
+    if (chargeHeld.current) {
+      chargeTime.current += delta;
+      useGameStore.setState({ chargeLevel: Math.min(chargeTime.current / CHARGE_TIME, 1) });
+    }
+
+    // --- Input ---
     const kbX =
       (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
       (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
@@ -67,55 +128,67 @@ export const Player = () => {
       (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
 
     if (usingKeyboard.current) {
-      // Keyboard: velocity-based target movement
       targetX.current += kbX * KEYBOARD_SPEED * delta;
       targetY.current += kbY * KEYBOARD_SPEED * delta;
     } else {
-      // Mouse: absolute target positioning
       const mouse = state.pointer;
       targetX.current = (mouse.x * viewport.width) / 2;
       targetY.current = (mouse.y * viewport.height) / 2;
-
-      // WASD as fine adjustment on top of mouse
       targetX.current += kbX * KEYBOARD_SPEED * delta;
       targetY.current += kbY * KEYBOARD_SPEED * delta;
     }
 
-    // Clamp to bounds
     targetX.current = Math.max(-BOUNDS_X, Math.min(BOUNDS_X, targetX.current));
     targetY.current = Math.max(-BOUNDS_Y, Math.min(BOUNDS_Y, targetY.current));
 
-    // Lerp position — same smoothing for both input methods
     currentX.current += (targetX.current - currentX.current) * LERP_FACTOR;
     currentY.current += (targetY.current - currentY.current) * LERP_FACTOR;
 
-    // Apply position
     meshRef.current.position.x = currentX.current;
     meshRef.current.position.y = currentY.current;
 
-    // Bank tilt
+    // --- Tilt ---
     const velocityX = targetX.current - currentX.current;
     const targetBank = -(velocityX / BOUNDS_X) * MAX_BANK;
     meshRef.current.rotation.z +=
       (targetBank - meshRef.current.rotation.z) * TILT_LERP;
 
-    // Pitch tilt
     const velocityY = targetY.current - currentY.current;
     const targetPitch = (velocityY / BOUNDS_Y) * MAX_PITCH;
     meshRef.current.rotation.x +=
       (targetPitch - meshRef.current.rotation.x) * TILT_LERP;
 
-    // Update store
+    // --- Barrel roll animation ---
+    if (gameState.isBarrelRolling) {
+      barrelRollAngle.current += delta * (Math.PI * 2) / 0.4; // Full rotation in 0.4s
+      meshRef.current.rotation.z = barrelRollAngle.current;
+    } else {
+      barrelRollAngle.current = 0;
+    }
+
+    // --- Invulnerability blink ---
+    if (gameState.isInvulnerable && !gameState.isBarrelRolling) {
+      meshRef.current.visible = Math.floor(gameState.invulnerableTimer * 10) % 2 === 0;
+    } else {
+      meshRef.current.visible = true;
+    }
+
     setPlayerPosition([currentX.current, currentY.current]);
 
-    // Auto-fire
-    fireTimer.current -= delta;
-    if (fireTimer.current <= 0) {
-      fireTimer.current = FIRE_RATE;
-      fireProjectile(currentX.current - 0.2, currentY.current);
-      fireProjectile(currentX.current + 0.2, currentY.current);
+    // --- Auto-fire (paused while charging) ---
+    if (!chargeHeld.current) {
+      fireTimer.current -= delta;
+      if (fireTimer.current <= 0) {
+        fireTimer.current = FIRE_RATE;
+        fireProjectile(currentX.current - 0.2, currentY.current);
+        fireProjectile(currentX.current + 0.2, currentY.current);
+      }
+    } else {
+      fireTimer.current = FIRE_RATE; // Reset so first shot after release isn't instant
     }
   });
+
+  const chargeLevel = useGameStore((s) => s.chargeLevel);
 
   return (
     <mesh ref={meshRef} position={[0, 0, 0]} scale={0.65}>
@@ -136,6 +209,20 @@ export const Player = () => {
           <sphereGeometry args={[0.12, 8, 8]} />
           <meshStandardMaterial color="#00ccff" emissive="#00ccff" emissiveIntensity={2} />
         </mesh>
+        {/* Charge glow — scales up with charge level */}
+        {chargeLevel > 0 && (
+          <mesh position={[0, 0, -0.3]} scale={0.3 + chargeLevel * 0.8}>
+            <sphereGeometry args={[0.5, 10, 10]} />
+            <meshStandardMaterial
+              color="#aaffff"
+              emissive="#00ffff"
+              emissiveIntensity={chargeLevel * 6}
+              transparent
+              opacity={0.3 + chargeLevel * 0.4}
+              toneMapped={false}
+            />
+          </mesh>
+        )}
       </group>
     </mesh>
   );

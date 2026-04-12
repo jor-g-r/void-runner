@@ -2,6 +2,7 @@ import { Player } from "./Player";
 import { ProjectileManager } from "./ProjectileManager";
 import { EnemyManager } from "./EnemyManager";
 import { Crosshair } from "./Crosshair";
+import { ScreenShake } from "./ScreenShake";
 import { Environment } from "./Environment";
 import { useGameStore } from "../stores/gameStore";
 
@@ -10,15 +11,13 @@ export const Game = () => {
 
   return (
     <>
-      {/* Lighting */}
       <ambientLight intensity={0.3} />
       <directionalLight position={[5, 5, 5]} intensity={0.8} />
 
-      {/* Always render environment for depth */}
       <Environment />
+      <ScreenShake />
 
-      {/* Game entities — only when playing */}
-      {phase === "playing" && (
+      {(phase === "playing" || phase === "gameover") && (
         <>
           <Player />
           <ProjectileManager />

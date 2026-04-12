@@ -11,6 +11,8 @@ export interface ProjectileData {
   velocity: [number, number, number];
   lifetime: number;
   owner: "player" | "enemy";
+  isCharged?: boolean;
+  radius?: number;
 }
 
 export interface EnemyData {
@@ -24,6 +26,7 @@ export interface EnemyData {
   stateTimer: number;
   radius: number;
   flashTimer: number;
+  strafeFactor?: number; // 1 = chase player, -1 = mirror, fractional = offset
 }
 
 export interface PickupData {
