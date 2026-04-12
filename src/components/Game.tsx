@@ -1,6 +1,7 @@
 import { Player } from "./Player";
 import { ProjectileManager } from "./ProjectileManager";
 import { EnemyManager } from "./EnemyManager";
+import { AsteroidManager } from "./AsteroidManager";
 import { Crosshair } from "./Crosshair";
 import { ScreenShake } from "./ScreenShake";
 import { Environment } from "./Environment";
@@ -17,11 +18,12 @@ export const Game = () => {
       <Environment />
       <ScreenShake />
 
-      {(phase === "playing" || phase === "gameover") && (
+      {(phase === "playing" || phase === "gameover" || phase === "upgrading" || phase === "victory") && (
         <>
           <Player />
           <ProjectileManager />
           <EnemyManager />
+          <AsteroidManager />
           <Crosshair />
         </>
       )}

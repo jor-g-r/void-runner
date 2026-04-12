@@ -113,9 +113,10 @@ export const Player = () => {
     const delta = Math.min(rawDelta, 0.1);
     const gameState = useGameStore.getState();
 
-    // --- Charge tracking ---
+    // --- Charge tracking (quickCharge upgrade = 2x faster) ---
+    const chargeSpeed = gameState.upgrades.includes("quickCharge") ? 2 : 1;
     if (chargeHeld.current) {
-      chargeTime.current += delta;
+      chargeTime.current += delta * chargeSpeed;
       useGameStore.setState({ chargeLevel: Math.min(chargeTime.current / CHARGE_TIME, 1) });
     }
 
@@ -176,15 +177,25 @@ export const Player = () => {
     setPlayerPosition([currentX.current, currentY.current]);
 
     // --- Auto-fire (paused while charging) ---
+    const rapidFire = gameState.upgrades.includes("rapidFire");
+    const wideShot = gameState.upgrades.includes("wideShot");
+    const actualFireRate = rapidFire ? FIRE_RATE * 0.6 : FIRE_RATE;
+
     if (!chargeHeld.current) {
       fireTimer.current -= delta;
       if (fireTimer.current <= 0) {
-        fireTimer.current = FIRE_RATE;
+        fireTimer.current = actualFireRate;
         fireProjectile(currentX.current - 0.2, currentY.current);
         fireProjectile(currentX.current + 0.2, currentY.current);
+
+        // Wide shot: 2 angled side lasers
+        if (wideShot) {
+          fireProjectile(currentX.current - 0.4, currentY.current, -15);
+          fireProjectile(currentX.current + 0.4, currentY.current, 15);
+        }
       }
     } else {
-      fireTimer.current = FIRE_RATE; // Reset so first shot after release isn't instant
+      fireTimer.current = actualFireRate;
     }
   });
 

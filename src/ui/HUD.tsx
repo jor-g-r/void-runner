@@ -6,6 +6,8 @@ export const HUD = () => {
   const playerMaxHP = useGameStore((s) => s.playerMaxHP);
   const chargeLevel = useGameStore((s) => s.chargeLevel);
   const barrelRollCooldown = useGameStore((s) => s.barrelRollCooldown);
+  const energy = useGameStore((s) => s.energy);
+  const upgrades = useGameStore((s) => s.upgrades);
 
   return (
     <div
@@ -90,6 +92,9 @@ export const HUD = () => {
         <div style={{ fontSize: "14px", opacity: 0.7 }}>SCORE</div>
         <div style={{ fontSize: "24px", fontWeight: "bold" }}>
           {score.toString().padStart(8, "0")}
+        </div>
+        <div style={{ fontSize: "14px", opacity: 0.7, marginTop: "8px" }}>
+          ENERGY {energy} {upgrades.length > 0 && `| +${upgrades.length}`}
         </div>
       </div>
     </div>

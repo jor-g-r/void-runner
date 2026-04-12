@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { EnemyData, GamePhase, ProjectileData } from "../types";
+import type { AsteroidData, EnemyData, GamePhase, PickupData, ProjectileData } from "../types";
 
 let nextProjectileId = 0;
 
@@ -28,16 +28,22 @@ interface GameState {
   enemies: EnemyData[];
   playerProjectiles: ProjectileData[];
   enemyProjectiles: ProjectileData[];
+  pickups: PickupData[];
+  asteroids: AsteroidData[];
+  waveIndex: number;
 
   // Screen shake
   shakeRequest: ShakeRequest | null;
 
   tick: (delta: number) => void;
   setPlayerPosition: (pos: [number, number]) => void;
-  firePlayerProjectile: (x: number, y: number) => void;
+  firePlayerProjectile: (x: number, y: number, vx?: number) => void;
   fireChargedShot: (x: number, y: number) => void;
   fireEnemyProjectile: (pos: [number, number, number], vel: [number, number, number]) => void;
   spawnEnemy: (enemy: EnemyData) => void;
+  spawnPickup: (pos: [number, number, number]) => void;
+  collectPickup: (id: string) => void;
+  applyUpgrade: (id: string) => void;
   damagePlayer: () => void;
   addScore: (points: number) => void;
   requestShake: (intensity: number, duration: number) => void;
@@ -65,6 +71,9 @@ const INITIAL_STATE = {
   enemies: [] as EnemyData[],
   playerProjectiles: [] as ProjectileData[],
   enemyProjectiles: [] as ProjectileData[],
+  pickups: [] as PickupData[],
+  asteroids: [] as AsteroidData[],
+  waveIndex: 0,
   shakeRequest: null as ShakeRequest | null,
 };
 
@@ -75,17 +84,40 @@ export const useGameStore = create<GameState>((set) => ({
     set((state) => {
       const delta = Math.min(rawDelta, 0.1);
 
-      // Update player projectiles
+      // Update player projectiles (with optional homing)
+      const hasHoming = state.upgrades.includes("homingShots");
       const playerProj = state.playerProjectiles
-        .map((p) => ({
-          ...p,
-          position: [
-            p.position[0] + p.velocity[0] * delta,
-            p.position[1] + p.velocity[1] * delta,
-            p.position[2] + p.velocity[2] * delta,
-          ] as [number, number, number],
-          lifetime: p.lifetime - delta,
-        }))
+        .map((p) => {
+          let vx = p.velocity[0];
+          let vy = p.velocity[1];
+          const vz = p.velocity[2];
+
+          // Homing: gently steer toward nearest enemy
+          if (hasHoming && !p.isCharged && state.enemies.length > 0) {
+            let nearest = state.enemies[0];
+            let bestDist = Infinity;
+            for (const e of state.enemies) {
+              const dx = e.position[0] - p.position[0];
+              const dz = e.position[2] - p.position[2];
+              const d = dx * dx + dz * dz;
+              if (d < bestDist) { bestDist = d; nearest = e; }
+            }
+            const steer = 8;
+            vx += (nearest.position[0] - p.position[0]) * steer * delta;
+            vy += (nearest.position[1] - p.position[1]) * steer * delta;
+          }
+
+          return {
+            ...p,
+            position: [
+              p.position[0] + vx * delta,
+              p.position[1] + vy * delta,
+              p.position[2] + vz * delta,
+            ] as [number, number, number],
+            velocity: [vx, vy, vz] as [number, number, number],
+            lifetime: p.lifetime - delta,
+          };
+        })
         .filter((p) => p.lifetime > 0);
 
       // Update enemy projectiles
@@ -120,7 +152,7 @@ export const useGameStore = create<GameState>((set) => ({
 
   setPlayerPosition: (pos) => set({ playerPosition: pos }),
 
-  firePlayerProjectile: (x, y) =>
+  firePlayerProjectile: (x, y, vx = 0) =>
     set((state) => ({
       playerProjectiles: [
         ...state.playerProjectiles,
@@ -128,7 +160,7 @@ export const useGameStore = create<GameState>((set) => ({
           id: `pp-${nextProjectileId++}`,
           active: true,
           position: [x, y, -2] as [number, number, number],
-          velocity: [0, 0, -200] as [number, number, number],
+          velocity: [vx, 0, -200] as [number, number, number],
           lifetime: 2,
           owner: "player" as const,
         },
@@ -171,6 +203,36 @@ export const useGameStore = create<GameState>((set) => ({
   spawnEnemy: (enemy) =>
     set((state) => ({
       enemies: [...state.enemies, enemy],
+    })),
+
+  spawnPickup: (pos) =>
+    set((state) => ({
+      pickups: [
+        ...state.pickups,
+        { id: `pk-${nextProjectileId++}`, position: [...pos] as [number, number, number] },
+      ],
+    })),
+
+  collectPickup: (id) =>
+    set((state) => {
+      const newEnergy = state.energy + 1;
+      // Every 10 energy = upgrade choice
+      const shouldUpgrade = newEnergy % 10 === 0 && newEnergy <= 30;
+      return {
+        pickups: state.pickups.filter((p) => p.id !== id),
+        energy: newEnergy,
+        phase: shouldUpgrade ? "upgrading" : state.phase,
+      };
+    }),
+
+  applyUpgrade: (id) =>
+    set((state) => ({
+      upgrades: [...state.upgrades, id],
+      phase: "playing",
+      // Shield upgrade grants +1 max HP and heals 1
+      ...(id === "shield"
+        ? { playerMaxHP: state.playerMaxHP + 1, playerHP: state.playerHP + 1 }
+        : {}),
     })),
 
   damagePlayer: () =>

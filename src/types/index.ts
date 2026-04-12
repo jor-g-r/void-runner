@@ -40,3 +40,12 @@ export interface Wave {
   formation: Formation;
   position: SpawnSide;
 }
+
+export interface AsteroidData {
+  id: string;
+  position: [number, number, number];
+  velocity: [number, number, number];
+  radius: number;
+  rotation: [number, number, number];
+  rotationSpeed: [number, number, number];
+}

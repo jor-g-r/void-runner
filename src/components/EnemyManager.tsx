@@ -3,17 +3,18 @@ import { useFrame } from "@react-three/fiber";
 import { useGameStore } from "../stores/gameStore";
 import { checkCollision } from "../systems/collisions";
 import { ENEMY_STATS } from "../data/enemies";
-import { Enemy } from "./Enemy";
+import { LEVEL_WAVES, LEVEL_END_TIME } from "../data/waves";
+import { spawnWave, resetTimelineIds } from "../systems/timeline";
+import { EnemyRenderer } from "./EnemyRenderer";
+import { PickupRenderer } from "./PickupRenderer";
 import { Explosion } from "./Explosion";
-import type { EnemyData, EnemyType } from "../types";
+import type { EnemyData } from "../types";
 
-let nextEnemyId = 0;
-
-const TEST_SPAWN_INTERVAL = 2;
 const FIGHTER_STOP_Z = -15;
 const FIGHTER_FIRE_INTERVAL = 1.5;
 const TANK_CHARGE_TIME = 1.5;
 const TANK_STOP_Z = -20;
+const PICKUP_DROP_CHANCE = 0.4;
 
 interface ExplosionInstance {
   id: string;
@@ -23,8 +24,8 @@ interface ExplosionInstance {
 let nextExplosionId = 0;
 
 export const EnemyManager = () => {
-  const spawnTimer = useRef(0);
   const [explosions, setExplosions] = useState<ExplosionInstance[]>([]);
+  const lastResetTime = useRef(-1);
 
   const removeExplosion = useCallback((id: string) => {
     setExplosions((prev) => prev.filter((e) => e.id !== id));
@@ -35,40 +36,30 @@ export const EnemyManager = () => {
     const state = useGameStore.getState();
     if (state.phase !== "playing") return;
 
+    // Reset timeline IDs on new game
+    if (state.time < 1 && lastResetTime.current !== 0) {
+      resetTimelineIds();
+      lastResetTime.current = 0;
+    }
+
     let enemies = [...state.enemies];
     const [playerX, playerY] = state.playerPosition;
 
-    // --- Spawn test enemies ---
-    spawnTimer.current += delta;
-    if (spawnTimer.current >= TEST_SPAWN_INTERVAL) {
-      spawnTimer.current = 0;
-      const types: EnemyType[] = ["drone", "drone", "drone", "fighter", "tank"];
-      const type = types[Math.floor(Math.random() * types.length)];
-      const stats = ENEMY_STATS[type];
+    // --- Wave timeline spawning ---
+    const currentTime = state.time;
+    let waveIndex = state.waveIndex;
 
-      // Fighters get a random strafe factor:
-      // 1 = chase player directly, -1 = full mirror, values between = offset
-      const strafeFactor = type === "fighter"
-        ? (Math.random() < 0.5 ? 1 : -(0.6 + Math.random() * 0.4))
-        : undefined;
+    while (waveIndex < LEVEL_WAVES.length && LEVEL_WAVES[waveIndex].time <= currentTime) {
+      const wave = LEVEL_WAVES[waveIndex];
+      const spawned = spawnWave(wave.enemies, wave.formation, wave.position);
+      enemies.push(...spawned);
+      waveIndex++;
+    }
 
-      enemies.push({
-        id: `enemy-${nextEnemyId++}`,
-        type,
-        hp: stats.hp,
-        maxHp: stats.hp,
-        position: [
-          (Math.random() - 0.5) * 12,
-          (Math.random() - 0.5) * 5,
-          -40 - Math.random() * 15,
-        ],
-        velocity: [0, 0, stats.speed],
-        state: "approaching",
-        stateTimer: 0,
-        radius: stats.radius,
-        flashTimer: 0,
-        strafeFactor,
-      });
+    // Check for victory (all waves done + no enemies left + past end time)
+    if (waveIndex >= LEVEL_WAVES.length && enemies.length === 0 && currentTime >= LEVEL_END_TIME) {
+      useGameStore.setState({ phase: "victory" });
+      return;
     }
 
     // --- Collision detection: player projectiles vs enemies ---
@@ -77,6 +68,7 @@ export const EnemyManager = () => {
     const updatedEnemies: EnemyData[] = [];
     const destroyedPositions: [number, number, number][] = [];
     let scoreGained = 0;
+    const scoreMultiplier = state.upgrades.includes("overdrive") ? 1.25 : 1;
 
     for (const enemy of enemies) {
       let damage = 0;
@@ -84,7 +76,6 @@ export const EnemyManager = () => {
       for (const proj of projectiles) {
         if (hitProjectileIds.has(proj.id)) continue;
         const projRadius = proj.isCharged ? (proj.radius ?? 1.5) : 0.2;
-        // Charged shots deal 5 damage
         if (checkCollision(proj.position, projRadius, enemy.position, enemy.radius)) {
           damage += proj.isCharged ? 5 : 1;
           if (!proj.isCharged) hitProjectileIds.add(proj.id);
@@ -95,11 +86,11 @@ export const EnemyManager = () => {
 
       if (newHp <= 0) {
         destroyedPositions.push([...enemy.position] as [number, number, number]);
-        scoreGained += ENEMY_STATS[enemy.type].score;
+        scoreGained += Math.floor(ENEMY_STATS[enemy.type].score * scoreMultiplier);
         continue;
       }
 
-      // --- Enemy AI by type ---
+      // --- Enemy AI ---
       let newState = enemy.state;
       let newTimer = enemy.stateTimer + delta;
       let newX = enemy.position[0];
@@ -114,18 +105,12 @@ export const EnemyManager = () => {
           newTimer = 0;
         }
         if (newState === "attacking") {
-          // Stop forward movement
           newZ = enemy.position[2];
-
-          // Strafe: chase (sf=1) goes toward player, mirror (sf=-1) goes opposite
           const targetX = playerX * sf;
           const dx = targetX - newX;
           newX += Math.sign(dx) * 4 * delta;
-
-          // Clamp to playfield
           newX = Math.max(-7, Math.min(7, newX));
 
-          // Fire at intervals — always aims at player regardless of strafe mode
           if (newTimer >= FIGHTER_FIRE_INTERVAL) {
             newTimer = 0;
             const dirX = (playerX - newX) * 0.5;
@@ -143,13 +128,10 @@ export const EnemyManager = () => {
           newTimer = 0;
         }
         if (newState === "charging") {
-          // Stop forward movement
           newZ = enemy.position[2];
-
           if (newTimer >= TANK_CHARGE_TIME) {
             newState = "attacking";
             newTimer = 0;
-            // Fire wide beam — 5 projectiles in a horizontal spread
             for (let i = -2; i <= 2; i++) {
               state.fireEnemyProjectile(
                 [newX + i * 1.5, newY, newZ],
@@ -160,7 +142,6 @@ export const EnemyManager = () => {
         }
         if (newState === "attacking") {
           newZ = enemy.position[2];
-          // Reset to charging after cooldown
           if (newTimer >= 2) {
             newState = "charging";
             newTimer = 0;
@@ -168,7 +149,6 @@ export const EnemyManager = () => {
         }
       }
 
-      // Despawn if past camera
       if (newZ > 15) continue;
 
       updatedEnemies.push({
@@ -181,7 +161,6 @@ export const EnemyManager = () => {
       });
     }
 
-    // Apply all state at once
     const filteredProjectiles = hitProjectileIds.size > 0
       ? projectiles.filter((p) => !hitProjectileIds.has(p.id))
       : projectiles;
@@ -190,9 +169,10 @@ export const EnemyManager = () => {
       enemies: updatedEnemies,
       playerProjectiles: filteredProjectiles,
       score: state.score + scoreGained,
+      waveIndex,
     });
 
-    // Spawn explosions + screen shake
+    // Spawn explosions + pickups
     if (destroyedPositions.length > 0) {
       state.requestShake(0.05, 0.1);
       setExplosions((prev) => [
@@ -202,16 +182,20 @@ export const EnemyManager = () => {
           position: pos,
         })),
       ]);
+
+      // Drop pickups
+      for (const pos of destroyedPositions) {
+        if (Math.random() < PICKUP_DROP_CHANCE) {
+          state.spawnPickup(pos);
+        }
+      }
     }
   });
 
-  const enemies = useGameStore((s) => s.enemies);
-
   return (
     <>
-      {enemies.map((e) => (
-        <Enemy key={e.id} data={e} />
-      ))}
+      <EnemyRenderer />
+      <PickupRenderer />
       {explosions.map((e) => (
         <Explosion
           key={e.id}
