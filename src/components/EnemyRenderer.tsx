@@ -1,137 +1,203 @@
-import { useRef } from "react";
-import { useFrame } from "@react-three/fiber";
-import { InstancedMesh, Object3D, Color } from "three";
+import { useRef, useMemo } from "react";
+import { useFrame, useLoader } from "@react-three/fiber";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import * as THREE from "three";
 import { useGameStore } from "../stores/gameStore";
+import { extractSubmeshes } from "../systems/modelUtils";
+import { createVaporwaveMaterial, updateVaporwaveTime } from "../systems/vaporwaveMaterial";
 
-const DUMMY = new Object3D();
+const DUMMY = new THREE.Object3D();
 const MAX_PER_TYPE = 30;
-const WHITE = new Color("#ffffff");
-const COLORS = {
-  drone: { color: new Color("#44ff88"), emissive: new Color("#22aa44") },
-  fighter: { color: new Color("#ff4466"), emissive: new Color("#aa2233") },
-  tank: { color: new Color("#ff8844"), emissive: new Color("#aa4422") },
-};
+const MAX_CHARGE = 10;
+const WHITE = new THREE.Color("#ffffff");
+const tempColor = new THREE.Color();
 
-// Reusable color for instanced setColorAt
-const tempColor = new Color();
+// Target sizes (normalized, in world units)
+const DRONE_SIZE = 1.2;
+const FIGHTER_SIZE = 1.6;
+const TANK_SIZE = 2.4;
+
+// Type tints — applied as instanceColor multiplier. Kept light so per-submesh
+// material colors still read through. Flash overrides to pure white.
+const DRONE_TINT = new THREE.Color("#aaffcc");
+const FIGHTER_TINT = new THREE.Color("#ffaacc");
+const TANK_TINT = new THREE.Color("#ffccaa");
+
+// 2-entry palettes per enemy type — kept small so enemies stay cheap to render.
+// First entry is the dominant identity; second is an accent for contrast.
+const DRONE_PALETTE = [
+  { baseColor: "#88cc99", topTint: "#44ff88", bottomTint: "#00ffcc" },
+  { baseColor: "#aadd77", topTint: "#ccff44", bottomTint: "#88ffaa" },
+];
+const FIGHTER_PALETTE = [
+  { baseColor: "#cc5577", topTint: "#ff4488", bottomTint: "#ff0055" },
+  { baseColor: "#aa4488", topTint: "#cc44ff", bottomTint: "#ff66cc" },
+];
+const TANK_PALETTE = [
+  { baseColor: "#cc8855", topTint: "#ffaa33", bottomTint: "#ff5500" },
+  { baseColor: "#aa6644", topTint: "#ffcc66", bottomTint: "#cc8844" },
+];
+
+type EnemyLike = { position: [number, number, number]; flashTimer: number };
+
+// Writes matrices + instance colors across every part-ref of one enemy type.
+// Each part shares the same transform but has its own material, giving the
+// enemy visible color blocks without extra per-entity logic.
+function updateTypeRefs(
+  refs: (THREE.InstancedMesh | null)[],
+  entities: EnemyLike[],
+  tint: THREE.Color,
+) {
+  for (const ref of refs) {
+    if (!ref) continue;
+    for (let i = 0; i < MAX_PER_TYPE; i++) {
+      if (i < entities.length) {
+        const e = entities[i];
+        DUMMY.position.set(e.position[0], e.position[1], e.position[2]);
+        DUMMY.rotation.set(0, Math.PI, 0);
+        DUMMY.scale.set(1, 1, 1);
+        DUMMY.updateMatrix();
+        ref.setMatrixAt(i, DUMMY.matrix);
+        tempColor.copy(e.flashTimer > 0 ? WHITE : tint);
+        ref.setColorAt(i, tempColor);
+      } else {
+        DUMMY.scale.set(0, 0, 0);
+        DUMMY.updateMatrix();
+        ref.setMatrixAt(i, DUMMY.matrix);
+      }
+    }
+    ref.instanceMatrix.needsUpdate = true;
+    if (ref.instanceColor) ref.instanceColor.needsUpdate = true;
+  }
+}
+
+type Part = { geometry: THREE.BufferGeometry; material: THREE.Material };
+
+function buildParts(
+  geos: THREE.BufferGeometry[],
+  palette: { baseColor: string; topTint: string; bottomTint: string }[],
+  emissiveIntensity: number,
+  fallback: THREE.BufferGeometry,
+): Part[] {
+  const source = geos.length ? geos : [fallback];
+  return source.map((geometry, i) => ({
+    geometry,
+    material: createVaporwaveMaterial({
+      ...palette[i % palette.length],
+      emissiveIntensity,
+    }),
+  }));
+}
 
 export const EnemyRenderer = () => {
-  const droneRef = useRef<InstancedMesh>(null);
-  const fighterRef = useRef<InstancedMesh>(null);
-  const tankRef = useRef<InstancedMesh>(null);
-  const tankChargeRef = useRef<InstancedMesh>(null);
+  const droneRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
+  const fighterRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
+  const tankRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
+  const tankChargeRef = useRef<THREE.InstancedMesh>(null);
 
-  useFrame(() => {
+  const enemyGltf = useLoader(GLTFLoader, "/models/enemies/scene.gltf");
+  const tankGltf = useLoader(GLTFLoader, "/models/player/scene.gltf");
+  const droneGltf = useLoader(GLTFLoader, "/models/drone/scene.gltf");
+
+  const droneParts = useMemo(
+    () =>
+      buildParts(
+        extractSubmeshes(droneGltf.scene, DRONE_SIZE, 2),
+        DRONE_PALETTE,
+        0.85,
+        new THREE.OctahedronGeometry(DRONE_SIZE / 2, 0),
+      ),
+    [droneGltf],
+  );
+
+  const fighterParts = useMemo(
+    () =>
+      buildParts(
+        extractSubmeshes(enemyGltf.scene, FIGHTER_SIZE, 2, "Hotrod"),
+        FIGHTER_PALETTE,
+        0.95,
+        new THREE.ConeGeometry(FIGHTER_SIZE / 2, FIGHTER_SIZE, 5),
+      ),
+    [enemyGltf],
+  );
+
+  const tankParts = useMemo(
+    () =>
+      buildParts(
+        extractSubmeshes(tankGltf.scene, TANK_SIZE, 2),
+        TANK_PALETTE,
+        0.9,
+        new THREE.BoxGeometry(TANK_SIZE, TANK_SIZE, TANK_SIZE * 0.7),
+      ),
+    [tankGltf],
+  );
+
+  useFrame((state) => {
+    updateVaporwaveTime(state.clock.elapsedTime);
     const enemies = useGameStore.getState().enemies;
 
     const drones = enemies.filter((e) => e.type === "drone");
     const fighters = enemies.filter((e) => e.type === "fighter");
     const tanks = enemies.filter((e) => e.type === "tank");
 
-    // --- Drones ---
-    if (droneRef.current) {
-      for (let i = 0; i < MAX_PER_TYPE; i++) {
-        if (i < drones.length) {
-          const e = drones[i];
-          DUMMY.position.set(e.position[0], e.position[1], e.position[2]);
-          DUMMY.scale.set(1, 1, 1);
-          DUMMY.updateMatrix();
-          droneRef.current.setMatrixAt(i, DUMMY.matrix);
-          tempColor.copy(e.flashTimer > 0 ? WHITE : COLORS.drone.color);
-          droneRef.current.setColorAt(i, tempColor);
-        } else {
-          DUMMY.scale.set(0, 0, 0);
-          DUMMY.updateMatrix();
-          droneRef.current.setMatrixAt(i, DUMMY.matrix);
-        }
-      }
-      droneRef.current.instanceMatrix.needsUpdate = true;
-      if (droneRef.current.instanceColor) droneRef.current.instanceColor.needsUpdate = true;
-    }
+    updateTypeRefs(droneRefs.current, drones, DRONE_TINT);
+    updateTypeRefs(fighterRefs.current, fighters, FIGHTER_TINT);
+    updateTypeRefs(tankRefs.current, tanks, TANK_TINT);
 
-    // --- Fighters ---
-    if (fighterRef.current) {
-      for (let i = 0; i < MAX_PER_TYPE; i++) {
-        if (i < fighters.length) {
-          const e = fighters[i];
-          DUMMY.position.set(e.position[0], e.position[1], e.position[2]);
-          DUMMY.rotation.set(Math.PI, 0, 0);
-          DUMMY.scale.set(1, 1, 1);
-          DUMMY.updateMatrix();
-          fighterRef.current.setMatrixAt(i, DUMMY.matrix);
-          tempColor.copy(e.flashTimer > 0 ? WHITE : COLORS.fighter.color);
-          fighterRef.current.setColorAt(i, tempColor);
-        } else {
-          DUMMY.scale.set(0, 0, 0);
-          DUMMY.rotation.set(0, 0, 0);
-          DUMMY.updateMatrix();
-          fighterRef.current.setMatrixAt(i, DUMMY.matrix);
-        }
-      }
-      fighterRef.current.instanceMatrix.needsUpdate = true;
-      if (fighterRef.current.instanceColor) fighterRef.current.instanceColor.needsUpdate = true;
-    }
-
-    // --- Tanks ---
-    if (tankRef.current && tankChargeRef.current) {
+    // Tank charge overlay — rendered as a separate pulsing sphere instance.
+    if (tankChargeRef.current) {
       let chargeIdx = 0;
-      for (let i = 0; i < MAX_PER_TYPE; i++) {
-        if (i < tanks.length) {
-          const e = tanks[i];
-          DUMMY.position.set(e.position[0], e.position[1], e.position[2]);
+      for (const e of tanks) {
+        if (e.state === "charging" && chargeIdx < MAX_CHARGE) {
+          const s = 0.3 + e.stateTimer * 0.5;
+          DUMMY.position.set(e.position[0], e.position[1], e.position[2] + 0.5);
           DUMMY.rotation.set(0, 0, 0);
-          DUMMY.scale.set(1, 1, 1);
+          DUMMY.scale.set(s, s, s);
           DUMMY.updateMatrix();
-          tankRef.current.setMatrixAt(i, DUMMY.matrix);
-          tempColor.copy(e.flashTimer > 0 ? WHITE : COLORS.tank.color);
-          tankRef.current.setColorAt(i, tempColor);
-
-          // Charge telegraph
-          if (e.state === "charging") {
-            const s = 0.3 + e.stateTimer * 0.5;
-            DUMMY.position.set(e.position[0], e.position[1], e.position[2] + 0.5);
-            DUMMY.scale.set(s, s, s);
-            DUMMY.updateMatrix();
-            tankChargeRef.current.setMatrixAt(chargeIdx, DUMMY.matrix);
-            chargeIdx++;
-          }
-        } else {
-          DUMMY.scale.set(0, 0, 0);
-          DUMMY.updateMatrix();
-          tankRef.current.setMatrixAt(i, DUMMY.matrix);
+          tankChargeRef.current.setMatrixAt(chargeIdx, DUMMY.matrix);
+          chargeIdx++;
         }
       }
-      // Hide unused charge spheres
-      for (let i = chargeIdx; i < 10; i++) {
+      for (let i = chargeIdx; i < MAX_CHARGE; i++) {
         DUMMY.scale.set(0, 0, 0);
         DUMMY.updateMatrix();
         tankChargeRef.current.setMatrixAt(i, DUMMY.matrix);
       }
-      tankRef.current.instanceMatrix.needsUpdate = true;
-      if (tankRef.current.instanceColor) tankRef.current.instanceColor.needsUpdate = true;
       tankChargeRef.current.instanceMatrix.needsUpdate = true;
     }
   });
 
   return (
     <>
-      <instancedMesh ref={droneRef} args={[undefined, undefined, MAX_PER_TYPE]}>
-        <octahedronGeometry args={[0.5, 0]} />
-        <meshStandardMaterial color="#44ff88" emissive="#22aa44" emissiveIntensity={0.5} />
-      </instancedMesh>
+      {droneParts.map((part, i) => (
+        <instancedMesh
+          key={`drone-${i}`}
+          ref={(el) => {
+            droneRefs.current[i] = el;
+          }}
+          args={[part.geometry, part.material, MAX_PER_TYPE]}
+        />
+      ))}
+      {fighterParts.map((part, i) => (
+        <instancedMesh
+          key={`fighter-${i}`}
+          ref={(el) => {
+            fighterRefs.current[i] = el;
+          }}
+          args={[part.geometry, part.material, MAX_PER_TYPE]}
+        />
+      ))}
+      {tankParts.map((part, i) => (
+        <instancedMesh
+          key={`tank-${i}`}
+          ref={(el) => {
+            tankRefs.current[i] = el;
+          }}
+          args={[part.geometry, part.material, MAX_PER_TYPE]}
+        />
+      ))}
 
-      <instancedMesh ref={fighterRef} args={[undefined, undefined, MAX_PER_TYPE]}>
-        <coneGeometry args={[0.5, 1.2, 5]} />
-        <meshStandardMaterial color="#ff4466" emissive="#aa2233" emissiveIntensity={0.5} />
-      </instancedMesh>
-
-      <instancedMesh ref={tankRef} args={[undefined, undefined, MAX_PER_TYPE]}>
-        <boxGeometry args={[1.2, 1.2, 0.8]} />
-        <meshStandardMaterial color="#ff8844" emissive="#aa4422" emissiveIntensity={0.5} />
-      </instancedMesh>
-
-      {/* Tank charge telegraph spheres */}
-      <instancedMesh ref={tankChargeRef} args={[undefined, undefined, 10]}>
+      <instancedMesh ref={tankChargeRef} args={[undefined, undefined, MAX_CHARGE]}>
         <sphereGeometry args={[1, 8, 8]} />
         <meshStandardMaterial
           color="#ff0000"

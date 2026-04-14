@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { useGameStore } from "../stores/gameStore";
 import { checkCollision } from "../systems/collisions";
 import { ENEMY_STATS } from "../data/enemies";
-import { LEVEL_WAVES, LEVEL_END_TIME } from "../data/waves";
+import { LEVEL_WAVES } from "../data/waves";
 import { spawnWave, resetTimelineIds } from "../systems/timeline";
 import { EnemyRenderer } from "./EnemyRenderer";
 import { PickupRenderer } from "./PickupRenderer";
@@ -56,11 +56,7 @@ export const EnemyManager = () => {
       waveIndex++;
     }
 
-    // Check for victory (all waves done + no enemies left + past end time)
-    if (waveIndex >= LEVEL_WAVES.length && enemies.length === 0 && currentTime >= LEVEL_END_TIME) {
-      useGameStore.setState({ phase: "victory" });
-      return;
-    }
+    // Note: victory is handled by Boss component when defeated
 
     // --- Collision detection: player projectiles vs enemies ---
     const projectiles = state.playerProjectiles;

@@ -1,0 +1,11 @@
+Model Information:
+* title:	Physter Underwater Smart ROV
+* source:	https://sketchfab.com/3d-models/physter-underwater-smart-rov-d448dbea41394347ab2aece26bdb5531
+* author:	TheRedMan (https://sketchfab.com/TheRedMan)
+
+Model License:
+* license type:	CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
+* requirements:	Author must be credited. No commercial use. Modified versions must have the same license.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Physter Underwater Smart ROV" (https://sketchfab.com/3d-models/physter-underwater-smart-rov-d448dbea41394347ab2aece26bdb5531) by TheRedMan (https://sketchfab.com/TheRedMan) licensed under CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)

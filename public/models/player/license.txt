@@ -1,0 +1,11 @@
+Model Information:
+* title:	Lowpoly - Spaceship
+* source:	https://sketchfab.com/3d-models/lowpoly-spaceship-0b28e7be4b9149b7827a89521b4239ad
+* author:	danielpaulse (https://sketchfab.com/danielpaulse)
+
+Model License:
+* license type:	CC-BY-ND-4.0 (http://creativecommons.org/licenses/by-nd/4.0/)
+* requirements:	Author must be credited. Modified versions can not be distributed. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Lowpoly - Spaceship" (https://sketchfab.com/3d-models/lowpoly-spaceship-0b28e7be4b9149b7827a89521b4239ad) by danielpaulse (https://sketchfab.com/danielpaulse) licensed under CC-BY-ND-4.0 (http://creativecommons.org/licenses/by-nd/4.0/)

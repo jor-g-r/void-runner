@@ -1,7 +1,11 @@
-import { useRef, useEffect } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
-import type { Mesh } from "three";
+import { useRef, useEffect, useMemo } from "react";
+import { useFrame, useThree, useLoader } from "@react-three/fiber";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { Group } from "three";
 import { useGameStore } from "../stores/gameStore";
+import { extractGroupByName } from "../systems/modelUtils";
+import { createVaporwaveMaterial } from "../systems/vaporwaveMaterial";
+import * as THREE from "three";
 
 const BOUNDS_X = 8.2;
 const BOUNDS_Y = 5;
@@ -16,8 +20,19 @@ const DOUBLE_TAP_WINDOW = 0.3;
 
 const keys = new Set<string>();
 
+// Vaporwave palette — each submesh of the ship gets one of these by index.
+// Inspired by the stylized toy-ship reference: purple cockpit, coral wings,
+// cool-white fuselage, electric-blue engines.
+const PLAYER_PALETTE = [
+  { baseColor: "#4a1866", topTint: "#cc66ff", bottomTint: "#ff66cc" }, // purple cockpit
+  { baseColor: "#1a3355", topTint: "#88ccff", bottomTint: "#aaffee" }, // cool white fuselage
+  { baseColor: "#661133", topTint: "#ff6688", bottomTint: "#ff3366" }, // coral wings
+  { baseColor: "#1e2e66", topTint: "#6699ff", bottomTint: "#00ddff" }, // electric blue engines
+  { baseColor: "#3a1a55", topTint: "#aa55ee", bottomTint: "#ee44bb" }, // magenta accent
+];
+
 export const Player = () => {
-  const meshRef = useRef<Mesh>(null);
+  const groupRef = useRef<Group>(null);
   const targetX = useRef(0);
   const targetY = useRef(0);
   const currentX = useRef(0);
@@ -27,8 +42,6 @@ export const Player = () => {
   const chargeHeld = useRef(false);
   const chargeTime = useRef(0);
   const barrelRollAngle = useRef(0);
-
-  // Double-tap detection for barrel roll
   const lastTapA = useRef(0);
   const lastTapD = useRef(0);
 
@@ -38,38 +51,54 @@ export const Player = () => {
   const fireCharged = useGameStore((s) => s.fireChargedShot);
   const startBarrelRoll = useGameStore((s) => s.startBarrelRoll);
   const phase = useGameStore((s) => s.phase);
+  const chargeLevel = useGameStore((s) => s.chargeLevel);
+
+  // Load player model
+  // Player uses craft1 from 5 low-polyish pack with vaporwave material.
+  // Each submesh gets a different palette entry so parts (cockpit, wings,
+  // fuselage, engines) keep distinct identity instead of a single flat tone.
+  const gltf = useLoader(GLTFLoader, "/models/crafts/scene.gltf");
+  const playerModel = useMemo(() => {
+    const group = extractGroupByName(gltf.scene, "craft1", 2.0);
+    if (!group) return null;
+    let meshIdx = 0;
+    group.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const palette = PLAYER_PALETTE[meshIdx % PLAYER_PALETTE.length];
+      mesh.material = createVaporwaveMaterial({
+        ...palette,
+        emissiveIntensity: 1.0,
+        scanSpeed: 1.4,
+        fresnelPower: 2.2,
+      });
+      meshIdx++;
+    });
+    return group;
+  }, [gltf]);
 
   useEffect(() => {
     const now = () => performance.now() / 1000;
 
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      if (keys.has(key)) return; // Ignore held repeats
+      if (keys.has(key)) return;
       keys.add(key);
 
       if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
         usingKeyboard.current = true;
       }
 
-      // Double-tap A for barrel roll left
       if (key === "a" || key === "arrowleft") {
         const t = now();
-        if (t - lastTapA.current < DOUBLE_TAP_WINDOW) {
-          startBarrelRoll();
-        }
+        if (t - lastTapA.current < DOUBLE_TAP_WINDOW) startBarrelRoll();
         lastTapA.current = t;
       }
-
-      // Double-tap D for barrel roll right
       if (key === "d" || key === "arrowright") {
         const t = now();
-        if (t - lastTapD.current < DOUBLE_TAP_WINDOW) {
-          startBarrelRoll();
-        }
+        if (t - lastTapD.current < DOUBLE_TAP_WINDOW) startBarrelRoll();
         lastTapD.current = t;
       }
-
-      // Spacebar = start charging
       if (key === " ") {
         chargeHeld.current = true;
         chargeTime.current = 0;
@@ -79,8 +108,6 @@ export const Player = () => {
     const onKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       keys.delete(key);
-
-      // Spacebar release = fire charged shot if ready
       if (key === " ") {
         chargeHeld.current = false;
         if (chargeTime.current >= CHARGE_TIME) {
@@ -93,9 +120,7 @@ export const Player = () => {
       }
     };
 
-    const onMouseMove = () => {
-      usingKeyboard.current = false;
-    };
+    const onMouseMove = () => { usingKeyboard.current = false; };
 
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -109,18 +134,16 @@ export const Player = () => {
   }, [startBarrelRoll, fireCharged]);
 
   useFrame((state, rawDelta) => {
-    if (phase !== "playing" || !meshRef.current) return;
+    if (phase !== "playing" || !groupRef.current) return;
     const delta = Math.min(rawDelta, 0.1);
     const gameState = useGameStore.getState();
 
-    // --- Charge tracking (quickCharge upgrade = 2x faster) ---
     const chargeSpeed = gameState.upgrades.includes("quickCharge") ? 2 : 1;
     if (chargeHeld.current) {
       chargeTime.current += delta * chargeSpeed;
       useGameStore.setState({ chargeLevel: Math.min(chargeTime.current / CHARGE_TIME, 1) });
     }
 
-    // --- Input ---
     const kbX =
       (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
       (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
@@ -145,38 +168,34 @@ export const Player = () => {
     currentX.current += (targetX.current - currentX.current) * LERP_FACTOR;
     currentY.current += (targetY.current - currentY.current) * LERP_FACTOR;
 
-    meshRef.current.position.x = currentX.current;
-    meshRef.current.position.y = currentY.current;
+    groupRef.current.position.x = currentX.current;
+    groupRef.current.position.y = currentY.current;
 
-    // --- Tilt ---
     const velocityX = targetX.current - currentX.current;
     const targetBank = -(velocityX / BOUNDS_X) * MAX_BANK;
-    meshRef.current.rotation.z +=
-      (targetBank - meshRef.current.rotation.z) * TILT_LERP;
+    groupRef.current.rotation.z +=
+      (targetBank - groupRef.current.rotation.z) * TILT_LERP;
 
     const velocityY = targetY.current - currentY.current;
     const targetPitch = (velocityY / BOUNDS_Y) * MAX_PITCH;
-    meshRef.current.rotation.x +=
-      (targetPitch - meshRef.current.rotation.x) * TILT_LERP;
+    groupRef.current.rotation.x +=
+      (targetPitch - groupRef.current.rotation.x) * TILT_LERP;
 
-    // --- Barrel roll animation ---
     if (gameState.isBarrelRolling) {
-      barrelRollAngle.current += delta * (Math.PI * 2) / 0.4; // Full rotation in 0.4s
-      meshRef.current.rotation.z = barrelRollAngle.current;
+      barrelRollAngle.current += delta * (Math.PI * 2) / 0.4;
+      groupRef.current.rotation.z = barrelRollAngle.current;
     } else {
       barrelRollAngle.current = 0;
     }
 
-    // --- Invulnerability blink ---
     if (gameState.isInvulnerable && !gameState.isBarrelRolling) {
-      meshRef.current.visible = Math.floor(gameState.invulnerableTimer * 10) % 2 === 0;
+      groupRef.current.visible = Math.floor(gameState.invulnerableTimer * 10) % 2 === 0;
     } else {
-      meshRef.current.visible = true;
+      groupRef.current.visible = true;
     }
 
     setPlayerPosition([currentX.current, currentY.current]);
 
-    // --- Auto-fire (paused while charging) ---
     const rapidFire = gameState.upgrades.includes("rapidFire");
     const wideShot = gameState.upgrades.includes("wideShot");
     const actualFireRate = rapidFire ? FIRE_RATE * 0.6 : FIRE_RATE;
@@ -187,8 +206,6 @@ export const Player = () => {
         fireTimer.current = actualFireRate;
         fireProjectile(currentX.current - 0.2, currentY.current);
         fireProjectile(currentX.current + 0.2, currentY.current);
-
-        // Wide shot: 2 angled side lasers
         if (wideShot) {
           fireProjectile(currentX.current - 0.4, currentY.current, -15);
           fireProjectile(currentX.current + 0.4, currentY.current, 15);
@@ -199,42 +216,30 @@ export const Player = () => {
     }
   });
 
-  const chargeLevel = useGameStore((s) => s.chargeLevel);
-
   return (
-    <mesh ref={meshRef} position={[0, 0, 0]} scale={0.65}>
-      <group>
-        <mesh>
-          <coneGeometry args={[0.3, 1.2, 4]} />
-          <meshStandardMaterial color="#4488ff" emissive="#2244aa" emissiveIntensity={0.5} />
+    <group ref={groupRef} position={[0, 0, 0]}>
+      {playerModel && <primitive object={playerModel} rotation={[0, Math.PI, 0]} />}
+
+      {/* Engine glow */}
+      <mesh position={[0, 0, 0.5]}>
+        <sphereGeometry args={[0.1, 8, 8]} />
+        <meshStandardMaterial color="#00ccff" emissive="#00ccff" emissiveIntensity={2} />
+      </mesh>
+
+      {/* Charge glow */}
+      {chargeLevel > 0 && (
+        <mesh position={[0, 0, -0.3]} scale={0.3 + chargeLevel * 0.8}>
+          <sphereGeometry args={[0.5, 10, 10]} />
+          <meshStandardMaterial
+            color="#aaffff"
+            emissive="#00ffff"
+            emissiveIntensity={chargeLevel * 6}
+            transparent
+            opacity={0.3 + chargeLevel * 0.4}
+            toneMapped={false}
+          />
         </mesh>
-        <mesh position={[-0.6, 0, 0.2]} rotation={[0, 0, -0.3]}>
-          <boxGeometry args={[0.8, 0.05, 0.4]} />
-          <meshStandardMaterial color="#3366dd" emissive="#1133aa" emissiveIntensity={0.3} />
-        </mesh>
-        <mesh position={[0.6, 0, 0.2]} rotation={[0, 0, 0.3]}>
-          <boxGeometry args={[0.8, 0.05, 0.4]} />
-          <meshStandardMaterial color="#3366dd" emissive="#1133aa" emissiveIntensity={0.3} />
-        </mesh>
-        <mesh position={[0, 0, 0.6]}>
-          <sphereGeometry args={[0.12, 8, 8]} />
-          <meshStandardMaterial color="#00ccff" emissive="#00ccff" emissiveIntensity={2} />
-        </mesh>
-        {/* Charge glow — scales up with charge level */}
-        {chargeLevel > 0 && (
-          <mesh position={[0, 0, -0.3]} scale={0.3 + chargeLevel * 0.8}>
-            <sphereGeometry args={[0.5, 10, 10]} />
-            <meshStandardMaterial
-              color="#aaffff"
-              emissive="#00ffff"
-              emissiveIntensity={chargeLevel * 6}
-              transparent
-              opacity={0.3 + chargeLevel * 0.4}
-              toneMapped={false}
-            />
-          </mesh>
-        )}
-      </group>
-    </mesh>
+      )}
+    </group>
   );
 };
