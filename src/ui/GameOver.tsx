@@ -1,8 +1,21 @@
+import { useEffect } from "react";
 import { useGameStore } from "../stores/gameStore";
+import { fadeOutMusic, playMusic } from "../systems/audio";
 
 export const GameOver = () => {
   const score = useGameStore((s) => s.score);
   const startGame = useGameStore((s) => s.startGame);
+
+  useEffect(() => {
+    void fadeOutMusic(1.5);
+  }, []);
+
+  const handleRetry = () => {
+    void fadeOutMusic(0.4).then(() => {
+      playMusic("stage-00", { loop: true, fadeIn: 1.2 });
+    });
+    startGame();
+  };
 
   return (
     <div
@@ -13,18 +26,19 @@ export const GameOver = () => {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        fontFamily: "'Courier New', monospace",
+        fontFamily: "'Roboto', sans-serif",
         color: "#ff4444",
         pointerEvents: "auto",
         cursor: "pointer",
         background: "rgba(0, 0, 0, 0.5)",
       }}
-      onClick={startGame}
+      onClick={handleRetry}
     >
       <h1
         style={{
+          fontFamily: "'Audiowide', cursive",
           fontSize: "48px",
-          fontWeight: "bold",
+          fontWeight: 400,
           margin: 0,
           textShadow: "0 0 20px #ff0000",
         }}

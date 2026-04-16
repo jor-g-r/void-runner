@@ -24,6 +24,9 @@ importers:
       '@react-three/fiber':
         specifier: ^9.1.2
         version: 9.5.0(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(three@0.175.0)
+      jsfxr:
+        specifier: ^1.4.0
+        version: 1.4.0
       react:
         specifier: ^19.2.4
         version: 19.2.5
@@ -1142,6 +1145,10 @@ packages:
   jsesc@3.1.0:
     resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
     engines: {node: '>=6'}
+    hasBin: true
+
+  jsfxr@1.4.0:
+    resolution: {integrity: sha512-izrgCMfJKEcut8f8YXps5gSk1N0Lf3GLcEAxm42+XYZL2JbYjhVrlmRughzQ+Xzeg9sp5blG6jzkwBa6Goy1Vg==}
     hasBin: true
 
   json-buffer@3.0.1:
@@ -2517,6 +2524,8 @@ snapshots:
       argparse: 2.0.1
 
   jsesc@3.1.0: {}
+
+  jsfxr@1.4.0: {}
 
   json-buffer@3.0.1: {}
 

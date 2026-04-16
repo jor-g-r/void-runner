@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { AsteroidData, EnemyData, GamePhase, PickupData, ProjectileData } from "../types";
+import { playSfx } from "../systems/audio";
 
 let nextProjectileId = 0;
 
@@ -100,7 +101,10 @@ export const useGameStore = create<GameState>((set) => ({
               const dx = e.position[0] - p.position[0];
               const dz = e.position[2] - p.position[2];
               const d = dx * dx + dz * dz;
-              if (d < bestDist) { bestDist = d; nearest = e; }
+              if (d < bestDist) {
+                bestDist = d;
+                nearest = e;
+              }
             }
             const steer = 8;
             vx += (nearest.position[0] - p.position[0]) * steer * delta;
@@ -213,7 +217,8 @@ export const useGameStore = create<GameState>((set) => ({
       ],
     })),
 
-  collectPickup: (id) =>
+  collectPickup: (id) => {
+    playSfx("pickup");
     set((state) => {
       const newEnergy = state.energy + 1;
       // Every 10 energy = upgrade choice
@@ -223,7 +228,8 @@ export const useGameStore = create<GameState>((set) => ({
         energy: newEnergy,
         phase: shouldUpgrade ? "upgrading" : state.phase,
       };
-    }),
+    });
+  },
 
   applyUpgrade: (id) =>
     set((state) => ({
@@ -239,6 +245,7 @@ export const useGameStore = create<GameState>((set) => ({
     set((state) => {
       if (state.isInvulnerable) return {};
       const newHP = state.playerHP - 1;
+      playSfx("hurt");
       return {
         playerHP: newHP,
         isInvulnerable: true,
@@ -253,14 +260,14 @@ export const useGameStore = create<GameState>((set) => ({
       score: state.score + points,
     })),
 
-  requestShake: (intensity, duration) =>
-    set({ shakeRequest: { intensity, duration } }),
+  requestShake: (intensity, duration) => set({ shakeRequest: { intensity, duration } }),
 
   clearShake: () => set({ shakeRequest: null }),
 
   startBarrelRoll: () =>
     set((state) => {
       if (state.barrelRollCooldown > 0 || state.isBarrelRolling) return {};
+      playSfx("roll");
       return {
         isBarrelRolling: true,
         barrelRollTimer: 0.4,

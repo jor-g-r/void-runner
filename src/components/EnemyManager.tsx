@@ -5,6 +5,7 @@ import { checkCollision } from "../systems/collisions";
 import { ENEMY_STATS } from "../data/enemies";
 import { LEVEL_WAVES } from "../data/waves";
 import { spawnWave, resetTimelineIds } from "../systems/timeline";
+import { playSfx } from "../systems/audio";
 import { EnemyRenderer } from "./EnemyRenderer";
 import { PickupRenderer } from "./PickupRenderer";
 import { Explosion } from "./Explosion";
@@ -64,6 +65,7 @@ export const EnemyManager = () => {
     const updatedEnemies: EnemyData[] = [];
     const destroyedPositions: [number, number, number][] = [];
     let scoreGained = 0;
+    let nonLethalHits = 0;
     const scoreMultiplier = state.upgrades.includes("overdrive") ? 1.25 : 1;
 
     for (const enemy of enemies) {
@@ -85,6 +87,8 @@ export const EnemyManager = () => {
         scoreGained += Math.floor(ENEMY_STATS[enemy.type].score * scoreMultiplier);
         continue;
       }
+
+      if (damage > 0) nonLethalHits++;
 
       // --- Enemy AI ---
       let newState = enemy.state;
@@ -129,10 +133,7 @@ export const EnemyManager = () => {
             newState = "attacking";
             newTimer = 0;
             for (let i = -2; i <= 2; i++) {
-              state.fireEnemyProjectile(
-                [newX + i * 1.5, newY, newZ],
-                [i * 3, 0, 40],
-              );
+              state.fireEnemyProjectile([newX + i * 1.5, newY, newZ], [i * 3, 0, 40]);
             }
           }
         }
@@ -157,9 +158,10 @@ export const EnemyManager = () => {
       });
     }
 
-    const filteredProjectiles = hitProjectileIds.size > 0
-      ? projectiles.filter((p) => !hitProjectileIds.has(p.id))
-      : projectiles;
+    const filteredProjectiles =
+      hitProjectileIds.size > 0
+        ? projectiles.filter((p) => !hitProjectileIds.has(p.id))
+        : projectiles;
 
     useGameStore.setState({
       enemies: updatedEnemies,
@@ -168,8 +170,13 @@ export const EnemyManager = () => {
       waveIndex,
     });
 
+    if (nonLethalHits > 0) {
+      playSfx("hit");
+    }
+
     // Spawn explosions + pickups
     if (destroyedPositions.length > 0) {
+      playSfx("explode");
       state.requestShake(0.05, 0.1);
       setExplosions((prev) => [
         ...prev,
@@ -193,11 +200,7 @@ export const EnemyManager = () => {
       <EnemyRenderer />
       <PickupRenderer />
       {explosions.map((e) => (
-        <Explosion
-          key={e.id}
-          position={e.position}
-          onComplete={() => removeExplosion(e.id)}
-        />
+        <Explosion key={e.id} position={e.position} onComplete={() => removeExplosion(e.id)} />
       ))}
     </>
   );

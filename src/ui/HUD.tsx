@@ -21,7 +21,7 @@ export const HUD = () => {
         justifyContent: "space-between",
         alignItems: "flex-start",
         pointerEvents: "none",
-        fontFamily: "'Courier New', monospace",
+        fontFamily: "'Roboto', sans-serif",
         color: "#00ddff",
         fontSize: "18px",
         textShadow: "0 0 10px #00aaff",
@@ -45,9 +45,7 @@ export const HUD = () => {
 
         {/* Barrel roll cooldown */}
         <div style={{ fontSize: "12px", opacity: 0.5, marginTop: "8px" }}>
-          ROLL {barrelRollCooldown > 0
-            ? `${barrelRollCooldown.toFixed(1)}s`
-            : "READY"}
+          ROLL {barrelRollCooldown > 0 ? `${barrelRollCooldown.toFixed(1)}s` : "READY"}
         </div>
       </div>
 
@@ -62,27 +60,33 @@ export const HUD = () => {
             width: "120px",
           }}
         >
-          <div style={{
-            height: "4px",
-            background: "#223344",
-            borderRadius: "2px",
-          }}>
-            <div style={{
-              height: "100%",
-              width: `${chargeLevel * 100}%`,
-              background: chargeLevel >= 1 ? "#00ffff" : "#0088aa",
-              boxShadow: chargeLevel >= 1 ? "0 0 10px #00ffff" : "none",
+          <div
+            style={{
+              height: "4px",
+              background: "#223344",
               borderRadius: "2px",
-              transition: "background 0.1s",
-            }} />
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${chargeLevel * 100}%`,
+                background: chargeLevel >= 1 ? "#00ffff" : "#0088aa",
+                boxShadow: chargeLevel >= 1 ? "0 0 10px #00ffff" : "none",
+                borderRadius: "2px",
+                transition: "background 0.1s",
+              }}
+            />
           </div>
-          <div style={{
-            fontSize: "10px",
-            textAlign: "center",
-            marginTop: "4px",
-            opacity: 0.6,
-            color: chargeLevel >= 1 ? "#00ffff" : "#0088aa",
-          }}>
+          <div
+            style={{
+              fontSize: "10px",
+              textAlign: "center",
+              marginTop: "4px",
+              opacity: 0.6,
+              color: chargeLevel >= 1 ? "#00ffff" : "#0088aa",
+            }}
+          >
             {chargeLevel >= 1 ? "RELEASE!" : "CHARGING"}
           </div>
         </div>

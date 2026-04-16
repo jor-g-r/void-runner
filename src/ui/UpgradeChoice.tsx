@@ -28,7 +28,7 @@ export const UpgradeChoice = () => {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        fontFamily: "'Courier New', monospace",
+        fontFamily: "'Roboto', sans-serif",
         background: "rgba(0, 0, 8, 0.7)",
         pointerEvents: "auto",
       }}
@@ -54,7 +54,7 @@ export const UpgradeChoice = () => {
               color: "#00ddff",
               padding: "20px 30px",
               fontSize: "16px",
-              fontFamily: "'Courier New', monospace",
+              fontFamily: "'Roboto', sans-serif",
               cursor: "pointer",
               minWidth: "180px",
               textAlign: "center",
@@ -72,9 +72,7 @@ export const UpgradeChoice = () => {
             <div style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "8px" }}>
               {upgrade.name}
             </div>
-            <div style={{ fontSize: "13px", opacity: 0.7 }}>
-              {upgrade.description}
-            </div>
+            <div style={{ fontSize: "13px", opacity: 0.7 }}>{upgrade.description}</div>
           </button>
         ))}
       </div>

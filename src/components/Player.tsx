@@ -5,6 +5,7 @@ import type { Group } from "three";
 import { useGameStore } from "../stores/gameStore";
 import { extractGroupByName } from "../systems/modelUtils";
 import { createVaporwaveMaterial } from "../systems/vaporwaveMaterial";
+import { playSfx } from "../systems/audio";
 import * as THREE from "three";
 
 const BOUNDS_X = 8.2;
@@ -115,12 +116,15 @@ export const Player = () => {
           const [px, py] = state.playerPosition;
           fireCharged(px, py);
           state.requestShake(0.08, 0.15);
+          playSfx("charge");
         }
         chargeTime.current = 0;
       }
     };
 
-    const onMouseMove = () => { usingKeyboard.current = false; };
+    const onMouseMove = () => {
+      usingKeyboard.current = false;
+    };
 
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -173,16 +177,14 @@ export const Player = () => {
 
     const velocityX = targetX.current - currentX.current;
     const targetBank = -(velocityX / BOUNDS_X) * MAX_BANK;
-    groupRef.current.rotation.z +=
-      (targetBank - groupRef.current.rotation.z) * TILT_LERP;
+    groupRef.current.rotation.z += (targetBank - groupRef.current.rotation.z) * TILT_LERP;
 
     const velocityY = targetY.current - currentY.current;
     const targetPitch = (velocityY / BOUNDS_Y) * MAX_PITCH;
-    groupRef.current.rotation.x +=
-      (targetPitch - groupRef.current.rotation.x) * TILT_LERP;
+    groupRef.current.rotation.x += (targetPitch - groupRef.current.rotation.x) * TILT_LERP;
 
     if (gameState.isBarrelRolling) {
-      barrelRollAngle.current += delta * (Math.PI * 2) / 0.4;
+      barrelRollAngle.current += (delta * (Math.PI * 2)) / 0.4;
       groupRef.current.rotation.z = barrelRollAngle.current;
     } else {
       barrelRollAngle.current = 0;
@@ -210,6 +212,7 @@ export const Player = () => {
           fireProjectile(currentX.current - 0.4, currentY.current, -15);
           fireProjectile(currentX.current + 0.4, currentY.current, 15);
         }
+        playSfx("shoot");
       }
     } else {
       fireTimer.current = actualFireRate;

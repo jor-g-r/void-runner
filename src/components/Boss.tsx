@@ -9,6 +9,7 @@ import { spawnWave as spawnWaveFunc } from "../systems/timeline";
 import { LEVEL_WAVES } from "../data/waves";
 import { extractGroupByName } from "../systems/modelUtils";
 import { createVaporwaveMaterial } from "../systems/vaporwaveMaterial";
+import { playSfx } from "../systems/audio";
 
 // Darker, menacing vaporwave palette — deep violet, hot magenta, abyssal blue.
 // Cycled per submesh to give the boss silhouette color variation.
@@ -102,6 +103,7 @@ export const Boss = () => {
       bs.entering = true;
       bs.position = [0, 0, -60];
       groupRef.current.visible = true;
+      playSfx("boss");
     }
 
     if (!bs.active) {
@@ -194,7 +196,7 @@ export const Boss = () => {
         const drones = spawnWaveFunc(
           ["drone", "drone"],
           "line" as const,
-          Math.random() < 0.5 ? "left" as const : "right" as const,
+          Math.random() < 0.5 ? ("left" as const) : ("right" as const),
         );
         for (const d of drones) {
           d.position[2] = bs.position[2];
