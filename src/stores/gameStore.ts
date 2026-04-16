@@ -93,7 +93,9 @@ export const useGameStore = create<GameState>((set) => ({
           let vy = p.velocity[1];
           const vz = p.velocity[2];
 
-          // Homing: gently steer toward nearest enemy
+          // Homing: steer toward nearest enemy. Bullets travel ~200u/s and
+          // reach mid-field targets in <0.1s, so steer must be aggressive
+          // to bend the trajectory in the brief window available.
           if (hasHoming && !p.isCharged && state.enemies.length > 0) {
             let nearest = state.enemies[0];
             let bestDist = Infinity;
@@ -106,7 +108,7 @@ export const useGameStore = create<GameState>((set) => ({
                 nearest = e;
               }
             }
-            const steer = 8;
+            const steer = 35;
             vx += (nearest.position[0] - p.position[0]) * steer * delta;
             vy += (nearest.position[1] - p.position[1]) * steer * delta;
           }

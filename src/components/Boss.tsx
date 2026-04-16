@@ -60,6 +60,13 @@ export const Boss = () => {
   const groupRef = useRef<Group>(null);
   const bossState = useRef<BossState>({ ...INITIAL_BOSS });
 
+  // Refs for visual feedback that needs to mutate every frame.
+  // (Component never re-renders; refs are the only way to animate.)
+  const weakPointMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const haloRef = useRef<THREE.Mesh>(null);
+  const haloMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const hpBarRef = useRef<THREE.Mesh>(null);
+
   const lastTime = useRef(0);
 
   const gltf = useLoader(GLTFLoader, "/models/boss/scene.gltf");
@@ -141,9 +148,10 @@ export const Boss = () => {
 
     if (damage > 0) {
       bs.hp -= damage;
-      bs.flashTimer = 0.1;
-      state.requestShake(0.03, 0.08);
+      bs.flashTimer = 0.18;
+      state.requestShake(0.08, 0.15);
       state.addScore(damage * 50);
+      playSfx("hit");
 
       if (hitIds.size > 0) {
         useGameStore.setState({
@@ -237,12 +245,40 @@ export const Boss = () => {
       }
     }
 
-    // Update visual
+    // Update visual transforms
     groupRef.current.position.set(bs.position[0], bs.position[1], bs.position[2]);
     groupRef.current.rotation.y += delta * 0.2;
-  });
 
-  const bs = bossState.current;
+    // Animate weak point: pulse + white flash on hit
+    const flashing = bs.flashTimer > 0;
+    const wpMat = weakPointMatRef.current;
+    if (wpMat) {
+      wpMat.emissiveIntensity = flashing ? 8 : 3 + Math.sin(bs.weakPointPulse) * 1.5;
+      const targetHex = flashing ? 0xffffff : 0xff00ff;
+      wpMat.color.setHex(targetHex);
+      wpMat.emissive.setHex(targetHex);
+    }
+
+    // Animate hit halo: expand + fade out across the flash window
+    if (haloRef.current && haloMatRef.current) {
+      if (flashing) {
+        const t = 1 - bs.flashTimer / 0.18;
+        const scale = 1 + t * 2.5;
+        haloRef.current.scale.setScalar(scale);
+        haloMatRef.current.opacity = 0.7 * (1 - t);
+        haloRef.current.visible = true;
+      } else {
+        haloRef.current.visible = false;
+      }
+    }
+
+    // Animate HP bar: shrink rightward (anchor left edge at x=-2.5)
+    if (hpBarRef.current) {
+      const s = Math.max(0, bs.hp / BOSS_HP);
+      hpBarRef.current.scale.x = s;
+      hpBarRef.current.position.x = -2.5 * (1 - s);
+    }
+  });
 
   return (
     <group ref={groupRef} visible={false}>
@@ -252,18 +288,37 @@ export const Boss = () => {
       <mesh position={[0, 0, 1]}>
         <sphereGeometry args={[0.6, 12, 12]} />
         <meshStandardMaterial
-          color={bs.flashTimer > 0 ? "#ffffff" : "#ff00ff"}
-          emissive={bs.flashTimer > 0 ? "#ffffff" : "#ff00ff"}
-          emissiveIntensity={3 + Math.sin(bs.weakPointPulse) * 1.5}
+          ref={weakPointMatRef}
+          color="#ff00ff"
+          emissive="#ff00ff"
+          emissiveIntensity={3}
           toneMapped={false}
         />
       </mesh>
 
-      {/* HP indicator ring */}
-      <mesh position={[0, -2.5, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[2, 2.2, 32, 1, 0, (bs.hp / BOSS_HP) * Math.PI * 2]} />
-        <meshBasicMaterial color="#ff00ff" transparent opacity={0.5} side={THREE.DoubleSide} />
+      {/* Hit halo — expanding white ring on damage */}
+      <mesh ref={haloRef} position={[0, 0, 1]} visible={false}>
+        <sphereGeometry args={[0.7, 16, 16]} />
+        <meshBasicMaterial
+          ref={haloMatRef}
+          color="#ffffff"
+          transparent
+          opacity={0.7}
+          toneMapped={false}
+        />
       </mesh>
+
+      {/* HP bar — fill scales rightward as boss takes damage */}
+      <group position={[0, -2.5, 0]}>
+        <mesh>
+          <planeGeometry args={[5, 0.18]} />
+          <meshBasicMaterial color="#330033" transparent opacity={0.6} side={THREE.DoubleSide} />
+        </mesh>
+        <mesh ref={hpBarRef} position={[0, 0, 0.01]}>
+          <planeGeometry args={[5, 0.18]} />
+          <meshBasicMaterial color="#ff00ff" transparent opacity={0.85} side={THREE.DoubleSide} />
+        </mesh>
+      </group>
     </group>
   );
 };

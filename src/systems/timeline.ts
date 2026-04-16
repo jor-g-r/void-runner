@@ -7,10 +7,7 @@ export function resetTimelineIds() {
   nextEnemyId = 0;
 }
 
-function getFormationOffsets(
-  count: number,
-  formation: Formation,
-): [number, number][] {
+function getFormationOffsets(count: number, formation: Formation): [number, number][] {
   const offsets: [number, number][] = [];
 
   switch (formation) {
@@ -58,12 +55,21 @@ function getFormationOffsets(
 
 function getBaseX(position: SpawnSide): number {
   switch (position) {
-    case "left": return -4;
-    case "right": return 4;
-    case "center": return 0;
-    case "wide": return 0;
+    case "left":
+      return -3;
+    case "right":
+      return 3;
+    case "center":
+      return 0;
+    case "wide":
+      return 0;
   }
 }
+
+// Player BOUNDS_X = 8.2; clamp enemies inside that minus a small margin so
+// the player can always position to hit them with a straight shot.
+const ENEMY_MAX_X = 7;
+const ENEMY_MAX_Y = 4;
 
 export function spawnWave(
   enemies: EnemyType[],
@@ -79,20 +85,18 @@ export function spawnWave(
     const stats = ENEMY_STATS[type];
     const [ox, oy] = offsets[i] ?? [0, 0];
 
-    const strafeFactor = type === "fighter"
-      ? (Math.random() < 0.5 ? 1 : -(0.6 + Math.random() * 0.4))
-      : undefined;
+    const strafeFactor =
+      type === "fighter" ? (Math.random() < 0.5 ? 1 : -(0.6 + Math.random() * 0.4)) : undefined;
+
+    const x = Math.max(-ENEMY_MAX_X, Math.min(ENEMY_MAX_X, baseX + ox));
+    const y = Math.max(-ENEMY_MAX_Y, Math.min(ENEMY_MAX_Y, oy));
 
     result.push({
       id: `enemy-${nextEnemyId++}`,
       type,
       hp: stats.hp,
       maxHp: stats.hp,
-      position: [
-        baseX + ox,
-        oy,
-        -45 - Math.random() * 5,
-      ],
+      position: [x, y, -45 - Math.random() * 5],
       velocity: [0, 0, stats.speed],
       state: "approaching",
       stateTimer: 0,

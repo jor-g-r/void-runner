@@ -209,8 +209,10 @@ export const Player = () => {
         fireProjectile(currentX.current - 0.2, currentY.current);
         fireProjectile(currentX.current + 0.2, currentY.current);
         if (wideShot) {
-          fireProjectile(currentX.current - 0.4, currentY.current, -15);
-          fireProjectile(currentX.current + 0.4, currentY.current, 15);
+          // vx=50 gives a visible ~14° spread that actually reaches enemies
+          // a few units off-axis at mid-range (z ~ -20).
+          fireProjectile(currentX.current - 0.4, currentY.current, -50);
+          fireProjectile(currentX.current + 0.4, currentY.current, 50);
         }
         playSfx("shoot");
       }

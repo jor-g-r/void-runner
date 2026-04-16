@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Player } from "./Player";
 import { ProjectileManager } from "./ProjectileManager";
 import { EnemyManager } from "./EnemyManager";
@@ -7,10 +7,38 @@ import { Boss } from "./Boss";
 import { Crosshair } from "./Crosshair";
 import { ScreenShake } from "./ScreenShake";
 import { Environment } from "./Environment";
+import { PlayerDeathNova } from "./PlayerDeathNova";
 import { useGameStore } from "../stores/gameStore";
+
+interface NovaInstance {
+  id: string;
+  position: [number, number, number];
+}
+
+let nextNovaId = 0;
 
 export const Game = () => {
   const phase = useGameStore((s) => s.phase);
+  const playerPosition = useGameStore((s) => s.playerPosition);
+  const prevPhase = useRef(phase);
+  const [novas, setNovas] = useState<NovaInstance[]>([]);
+
+  const removeNova = useCallback((id: string) => {
+    setNovas((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
+  useEffect(() => {
+    if (prevPhase.current === "playing" && phase === "gameover") {
+      setNovas((prev) => [
+        ...prev,
+        {
+          id: `nova-${nextNovaId++}`,
+          position: [playerPosition[0], playerPosition[1], 0],
+        },
+      ]);
+    }
+    prevPhase.current = phase;
+  }, [phase, playerPosition]);
 
   return (
     <>
@@ -25,7 +53,10 @@ export const Game = () => {
       <Environment />
       <ScreenShake />
 
-      {(phase === "playing" || phase === "gameover" || phase === "upgrading" || phase === "victory") && (
+      {(phase === "playing" ||
+        phase === "gameover" ||
+        phase === "upgrading" ||
+        phase === "victory") && (
         <Suspense fallback={null}>
           <Player />
           <ProjectileManager />
@@ -35,6 +66,10 @@ export const Game = () => {
           <Crosshair />
         </Suspense>
       )}
+
+      {novas.map((n) => (
+        <PlayerDeathNova key={n.id} position={n.position} onComplete={() => removeNova(n.id)} />
+      ))}
     </>
   );
 };
