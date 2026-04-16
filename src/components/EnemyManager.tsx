@@ -9,6 +9,7 @@ import { playSfx } from "../systems/audio";
 import { EnemyRenderer } from "./EnemyRenderer";
 import { PickupRenderer } from "./PickupRenderer";
 import { Explosion } from "./Explosion";
+import { ScorePopup } from "./ScorePopup";
 import type { EnemyData } from "../types";
 
 const FIGHTER_STOP_Z = -15;
@@ -22,14 +23,26 @@ interface ExplosionInstance {
   position: [number, number, number];
 }
 
+interface PopupInstance {
+  id: string;
+  position: [number, number, number];
+  amount: number;
+}
+
 let nextExplosionId = 0;
+let nextPopupId = 0;
 
 export const EnemyManager = () => {
   const [explosions, setExplosions] = useState<ExplosionInstance[]>([]);
-  const lastResetTime = useRef(-1);
+  const [popups, setPopups] = useState<PopupInstance[]>([]);
+  const lastTime = useRef(0);
 
   const removeExplosion = useCallback((id: string) => {
     setExplosions((prev) => prev.filter((e) => e.id !== id));
+  }, []);
+
+  const removePopup = useCallback((id: string) => {
+    setPopups((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
   useFrame((_state, rawDelta) => {
@@ -37,11 +50,11 @@ export const EnemyManager = () => {
     const state = useGameStore.getState();
     if (state.phase !== "playing") return;
 
-    // Reset timeline IDs on new game
-    if (state.time < 1 && lastResetTime.current !== 0) {
+    // Reset timeline IDs on new game (detect time going backwards)
+    if (state.time < lastTime.current) {
       resetTimelineIds();
-      lastResetTime.current = 0;
     }
+    lastTime.current = state.time;
 
     let enemies = [...state.enemies];
     const [playerX, playerY] = state.playerPosition;
@@ -63,7 +76,7 @@ export const EnemyManager = () => {
     const projectiles = state.playerProjectiles;
     const hitProjectileIds = new Set<string>();
     const updatedEnemies: EnemyData[] = [];
-    const destroyedPositions: [number, number, number][] = [];
+    const destroyed: { position: [number, number, number]; score: number }[] = [];
     let scoreGained = 0;
     let nonLethalHits = 0;
     const scoreMultiplier = state.upgrades.includes("overdrive") ? 1.25 : 1;
@@ -83,8 +96,12 @@ export const EnemyManager = () => {
       const newHp = enemy.hp - damage;
 
       if (newHp <= 0) {
-        destroyedPositions.push([...enemy.position] as [number, number, number]);
-        scoreGained += Math.floor(ENEMY_STATS[enemy.type].score * scoreMultiplier);
+        const score = Math.floor(ENEMY_STATS[enemy.type].score * scoreMultiplier);
+        destroyed.push({
+          position: [...enemy.position] as [number, number, number],
+          score,
+        });
+        scoreGained += score;
         continue;
       }
 
@@ -174,22 +191,30 @@ export const EnemyManager = () => {
       playSfx("hit");
     }
 
-    // Spawn explosions + pickups
-    if (destroyedPositions.length > 0) {
+    // Spawn explosions + popups + pickups
+    if (destroyed.length > 0) {
       playSfx("explode");
       state.requestShake(0.05, 0.1);
       setExplosions((prev) => [
         ...prev,
-        ...destroyedPositions.map((pos) => ({
+        ...destroyed.map((d) => ({
           id: `exp-${nextExplosionId++}`,
-          position: pos,
+          position: d.position,
+        })),
+      ]);
+      setPopups((prev) => [
+        ...prev,
+        ...destroyed.map((d) => ({
+          id: `pop-${nextPopupId++}`,
+          position: d.position,
+          amount: d.score,
         })),
       ]);
 
       // Drop pickups
-      for (const pos of destroyedPositions) {
+      for (const d of destroyed) {
         if (Math.random() < PICKUP_DROP_CHANCE) {
-          state.spawnPickup(pos);
+          state.spawnPickup(d.position);
         }
       }
     }
@@ -201,6 +226,14 @@ export const EnemyManager = () => {
       <PickupRenderer />
       {explosions.map((e) => (
         <Explosion key={e.id} position={e.position} onComplete={() => removeExplosion(e.id)} />
+      ))}
+      {popups.map((p) => (
+        <ScorePopup
+          key={p.id}
+          position={p.position}
+          amount={p.amount}
+          onComplete={() => removePopup(p.id)}
+        />
       ))}
     </>
   );

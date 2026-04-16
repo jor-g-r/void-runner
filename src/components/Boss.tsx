@@ -59,7 +59,8 @@ const INITIAL_BOSS: BossState = {
 export const Boss = () => {
   const groupRef = useRef<Group>(null);
   const bossState = useRef<BossState>({ ...INITIAL_BOSS });
-  const lastResetTime = useRef(-1);
+
+  const lastTime = useRef(0);
 
   const gltf = useLoader(GLTFLoader, "/models/boss/scene.gltf");
   const model = useMemo(() => {
@@ -88,13 +89,16 @@ export const Boss = () => {
 
     const bs = bossState.current;
 
-    // Reset on new game
-    if (state.time < 1 && lastResetTime.current !== 0) {
+    // Reset on new game: detect when game time goes backwards (startGame()
+    // resets state.time to 0). The Boss component never unmounts, so its
+    // bossState ref otherwise persists between runs.
+    if (state.time < lastTime.current) {
       Object.assign(bs, { ...INITIAL_BOSS });
-      lastResetTime.current = 0;
       groupRef.current.visible = false;
+      lastTime.current = state.time;
       return;
     }
+    lastTime.current = state.time;
 
     // Activate boss after all waves are done
     const allWavesSpawned = state.waveIndex >= LEVEL_WAVES.length;
