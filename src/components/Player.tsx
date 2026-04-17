@@ -117,6 +117,10 @@ export const Player = () => {
           fireCharged(px, py);
           state.requestShake(0.08, 0.15);
           playSfx("charge");
+        } else {
+          // Aborted charge — clear the glow state explicitly so the sphere
+          // doesn't linger at whatever partial level was last set.
+          useGameStore.setState({ chargeLevel: 0 });
         }
         chargeTime.current = 0;
       }
