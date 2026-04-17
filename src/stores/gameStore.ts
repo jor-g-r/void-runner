@@ -16,6 +16,9 @@ interface GameState {
 
   playerHP: number;
   playerMaxHP: number;
+  shieldHP: number;
+  shieldMaxHP: number;
+  shieldRegenTimer: number;
   playerPosition: [number, number];
   energy: number;
   upgrades: string[];
@@ -45,7 +48,7 @@ interface GameState {
   spawnPickup: (pos: [number, number, number]) => void;
   collectPickup: (id: string) => void;
   applyUpgrade: (id: string) => void;
-  damagePlayer: () => void;
+  damagePlayer: (amount: number) => void;
   addScore: (points: number) => void;
   requestShake: (intensity: number, duration: number) => void;
   clearShake: () => void;
@@ -58,8 +61,11 @@ const INITIAL_STATE = {
   phase: "title" as GamePhase,
   score: 0,
   time: 0,
-  playerHP: 3,
-  playerMaxHP: 3,
+  playerHP: 100,
+  playerMaxHP: 100,
+  shieldHP: 0,
+  shieldMaxHP: 0,
+  shieldRegenTimer: 0,
   playerPosition: [0, 0] as [number, number],
   energy: 0,
   upgrades: [] as string[],
@@ -77,6 +83,9 @@ const INITIAL_STATE = {
   waveIndex: 0,
   shakeRequest: null as ShakeRequest | null,
 };
+
+// Shield recovers to full this many seconds after the last damage taken.
+const SHIELD_REGEN_DELAY = 6;
 
 export const useGameStore = create<GameState>((set) => ({
   ...INITIAL_STATE,
@@ -144,6 +153,13 @@ export const useGameStore = create<GameState>((set) => ({
       const barrelRollCooldown = Math.max(0, state.barrelRollCooldown - delta);
       const barrelRollTimer = Math.max(0, state.barrelRollTimer - delta);
 
+      // Shield regen: countdown then full refill (when upgrade is active)
+      const shieldRegenTimer = Math.max(0, state.shieldRegenTimer - delta);
+      const shieldHP =
+        state.shieldMaxHP > 0 && shieldRegenTimer === 0 && state.shieldHP < state.shieldMaxHP
+          ? state.shieldMaxHP
+          : state.shieldHP;
+
       return {
         time: state.time + delta,
         playerProjectiles: playerProj,
@@ -153,6 +169,8 @@ export const useGameStore = create<GameState>((set) => ({
         barrelRollCooldown,
         barrelRollTimer,
         isBarrelRolling: barrelRollTimer > 0,
+        shieldRegenTimer,
+        shieldHP,
       };
     }),
 
@@ -237,19 +255,29 @@ export const useGameStore = create<GameState>((set) => ({
     set((state) => ({
       upgrades: [...state.upgrades, id],
       phase: "playing",
-      // Shield upgrade grants +1 max HP and heals 1
-      ...(id === "shield"
-        ? { playerMaxHP: state.playerMaxHP + 1, playerHP: state.playerHP + 1 }
-        : {}),
+      // Shield upgrade grants a 40-HP absorbing layer that refills after
+      // SHIELD_REGEN_DELAY seconds with no damage taken.
+      ...(id === "shield" ? { shieldMaxHP: 40, shieldHP: 40 } : {}),
     })),
 
-  damagePlayer: () =>
+  damagePlayer: (amount) =>
     set((state) => {
       if (state.isInvulnerable) return {};
-      const newHP = state.playerHP - 1;
+
+      // Drain shield first, then hull
+      let remaining = amount;
+      let newShieldHP = state.shieldHP;
+      if (newShieldHP > 0) {
+        const absorbed = Math.min(newShieldHP, remaining);
+        newShieldHP -= absorbed;
+        remaining -= absorbed;
+      }
+      const newHP = state.playerHP - remaining;
       playSfx("hurt");
       return {
         playerHP: newHP,
+        shieldHP: newShieldHP,
+        shieldRegenTimer: state.shieldMaxHP > 0 ? SHIELD_REGEN_DELAY : 0,
         isInvulnerable: true,
         invulnerableTimer: 1.5,
         phase: newHP <= 0 ? "gameover" : state.phase,

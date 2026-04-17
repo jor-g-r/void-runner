@@ -7,7 +7,11 @@ export interface UpgradeDef {
 export const UPGRADES: UpgradeDef[] = [
   { id: "rapidFire", name: "RAPID FIRE", description: "Fire rate +40%" },
   { id: "wideShot", name: "WIDE SHOT", description: "+2 angled side lasers" },
-  { id: "shield", name: "SHIELD", description: "+1 max HP, heal 1 HP" },
+  {
+    id: "shield",
+    name: "SHIELD",
+    description: "40 HP absorbing layer, refills after 6s no damage",
+  },
   { id: "homingShots", name: "HOMING", description: "Shots curve toward enemies" },
   { id: "quickCharge", name: "QUICK CHARGE", description: "Charge shot 2x faster" },
   { id: "magnet", name: "MAGNET", description: "Pickup attract range 3x" },

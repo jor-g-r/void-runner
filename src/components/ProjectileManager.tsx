@@ -32,7 +32,7 @@ export const ProjectileManager = () => {
 
     for (const proj of enemyProj) {
       if (checkCollision(proj.position, 0.3, playerPos, PLAYER_RADIUS)) {
-        state.damagePlayer();
+        state.damagePlayer(30);
         // Remove this projectile
         useGameStore.setState({
           enemyProjectiles: state.enemyProjectiles.filter((p) => p.id !== proj.id),
@@ -62,7 +62,11 @@ export const ProjectileManager = () => {
       const charged = playerProj.filter((p) => p.isCharged);
       for (let i = 0; i < 5; i++) {
         if (i < charged.length) {
-          DUMMY.position.set(charged[i].position[0], charged[i].position[1], charged[i].position[2]);
+          DUMMY.position.set(
+            charged[i].position[0],
+            charged[i].position[1],
+            charged[i].position[2],
+          );
           DUMMY.scale.set(1, 1, 1);
         } else {
           DUMMY.scale.set(0, 0, 0);

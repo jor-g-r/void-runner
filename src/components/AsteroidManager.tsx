@@ -56,11 +56,7 @@ export const AsteroidManager = () => {
             (Math.random() - 0.5) * 8,
             -50 - Math.random() * 20,
           ],
-          velocity: [
-            (Math.random() - 0.5) * 3,
-            (Math.random() - 0.5) * 2,
-            12 + Math.random() * 6,
-          ],
+          velocity: [(Math.random() - 0.5) * 3, (Math.random() - 0.5) * 2, 12 + Math.random() * 6],
           radius: size,
           rotation: [
             Math.random() * Math.PI * 2,
@@ -96,7 +92,7 @@ export const AsteroidManager = () => {
 
       // Collision with player
       if (checkCollision(newPos, a.radius, playerPos, PLAYER_RADIUS)) {
-        state.damagePlayer();
+        state.damagePlayer(30);
         continue; // Remove asteroid on hit
       }
 

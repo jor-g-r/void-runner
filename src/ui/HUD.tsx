@@ -1,13 +1,21 @@
 import { useGameStore } from "../stores/gameStore";
 
+const HP_BAR_WIDTH = 220;
+const HP_BAR_HEIGHT = 12;
+
 export const HUD = () => {
   const score = useGameStore((s) => s.score);
   const playerHP = useGameStore((s) => s.playerHP);
   const playerMaxHP = useGameStore((s) => s.playerMaxHP);
+  const shieldHP = useGameStore((s) => s.shieldHP);
+  const shieldMaxHP = useGameStore((s) => s.shieldMaxHP);
   const chargeLevel = useGameStore((s) => s.chargeLevel);
   const barrelRollCooldown = useGameStore((s) => s.barrelRollCooldown);
   const energy = useGameStore((s) => s.energy);
   const upgrades = useGameStore((s) => s.upgrades);
+
+  const hpPct = Math.max(0, playerHP) / playerMaxHP;
+  const shieldPct = shieldMaxHP > 0 ? Math.max(0, shieldHP) / shieldMaxHP : 0;
 
   return (
     <div
@@ -29,22 +37,60 @@ export const HUD = () => {
     >
       <div>
         <div style={{ fontSize: "14px", opacity: 0.7 }}>HULL</div>
-        <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
-          {Array.from({ length: playerMaxHP }).map((_, i) => (
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px" }}>
+          <div>
+            {/* HP bar */}
             <div
-              key={i}
               style={{
-                width: "24px",
-                height: "8px",
-                background: i < playerHP ? "#00ddff" : "#223344",
-                boxShadow: i < playerHP ? "0 0 6px #00aaff" : "none",
+                width: `${HP_BAR_WIDTH}px`,
+                height: `${HP_BAR_HEIGHT}px`,
+                background: "#220011",
+                border: "1px solid rgba(255, 85, 136, 0.3)",
+                borderRadius: "2px",
+                overflow: "hidden",
               }}
-            />
-          ))}
+            >
+              <div
+                style={{
+                  width: `${hpPct * 100}%`,
+                  height: "100%",
+                  background: "linear-gradient(90deg, #ff5588, #ff0055)",
+                  boxShadow: "0 0 8px #ff0055",
+                  transition: "width 0.15s",
+                }}
+              />
+            </div>
+            {/* Shield sub-bar (only when shield upgrade active) */}
+            {shieldMaxHP > 0 && (
+              <div
+                style={{
+                  width: `${HP_BAR_WIDTH}px`,
+                  height: "4px",
+                  background: "#001122",
+                  borderRadius: "2px",
+                  marginTop: "3px",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${shieldPct * 100}%`,
+                    height: "100%",
+                    background: "#00ddff",
+                    boxShadow: "0 0 6px #00aaff",
+                    transition: "width 0.2s",
+                  }}
+                />
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: "14px", opacity: 0.85, color: "#ff88aa" }}>
+            {Math.max(0, Math.ceil(playerHP))} / {playerMaxHP}
+          </div>
         </div>
 
         {/* Barrel roll cooldown */}
-        <div style={{ fontSize: "12px", opacity: 0.5, marginTop: "8px" }}>
+        <div style={{ fontSize: "12px", opacity: 0.5, marginTop: "10px" }}>
           ROLL {barrelRollCooldown > 0 ? `${barrelRollCooldown.toFixed(1)}s` : "READY"}
         </div>
       </div>
