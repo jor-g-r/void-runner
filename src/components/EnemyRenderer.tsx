@@ -17,25 +17,61 @@ const DRONE_SIZE = 1.2;
 const FIGHTER_SIZE = 1.6;
 const TANK_SIZE = 2.4;
 
-// Type tints — applied as instanceColor multiplier. Kept light so per-submesh
-// material colors still read through. Flash overrides to pure white.
-const DRONE_TINT = new THREE.Color("#aaffcc");
-const FIGHTER_TINT = new THREE.Color("#ffaacc");
-const TANK_TINT = new THREE.Color("#ffccaa");
+// Type tints — multiplied with the material color per-instance. Kept near-white
+// so the dark material bases drive the look. Flash overrides to pure white.
+const DRONE_TINT = new THREE.Color("#eeeeee");
+const FIGHTER_TINT = new THREE.Color("#eeeeee");
+const TANK_TINT = new THREE.Color("#eeeeee");
 
-// 2-entry palettes per enemy type — kept small so enemies stay cheap to render.
-// First entry is the dominant identity; second is an accent for contrast.
+// Facet-mode palettes: three tints per submesh driven by the world-space
+// normal axes. X = side faces, Y = top/bottom, Z = front/back. Each enemy
+// type keeps an identity family (cyan-green for drones, pink-purple for
+// fighters, orange-amber for tanks) while letting each facet read distinct.
+// Drones get a chrome/silver palette so fighters and tanks keep the
+// saturated vaporwave identity. High value-range (dark shadows → bright
+// highlights) plus a subtle cool/warm shift per submesh makes them read
+// as polished metal instead of a flat color block.
 const DRONE_PALETTE = [
-  { baseColor: "#88cc99", topTint: "#44ff88", bottomTint: "#00ffcc" },
-  { baseColor: "#aadd77", topTint: "#ccff44", bottomTint: "#88ffaa" },
+  {
+    baseColor: "#000000",
+    facetTintX: "#7a8598", // steel sides
+    facetTintY: "#f0f4f8", // bright platinum top
+    facetTintZ: "#2a3340", // deep chrome shadow (front/back)
+  },
+  {
+    baseColor: "#000000",
+    facetTintX: "#aab4c2", // light chrome sides
+    facetTintY: "#d8e4f0", // cool silver top
+    facetTintZ: "#3a4050", // cold steel shadow
+  },
 ];
 const FIGHTER_PALETTE = [
-  { baseColor: "#cc5577", topTint: "#ff4488", bottomTint: "#ff0055" },
-  { baseColor: "#aa4488", topTint: "#cc44ff", bottomTint: "#ff66cc" },
+  {
+    baseColor: "#000000",
+    facetTintX: "#ff4488",
+    facetTintY: "#cc44ff",
+    facetTintZ: "#ff8866",
+  },
+  {
+    baseColor: "#000000",
+    facetTintX: "#ff2266",
+    facetTintY: "#aa44ff",
+    facetTintZ: "#ff66aa",
+  },
 ];
 const TANK_PALETTE = [
-  { baseColor: "#cc8855", topTint: "#ffaa33", bottomTint: "#ff5500" },
-  { baseColor: "#aa6644", topTint: "#ffcc66", bottomTint: "#cc8844" },
+  {
+    baseColor: "#000000",
+    facetTintX: "#ffaa33",
+    facetTintY: "#ffee66",
+    facetTintZ: "#ff6644",
+  },
+  {
+    baseColor: "#000000",
+    facetTintX: "#ff8844",
+    facetTintY: "#ffcc44",
+    facetTintZ: "#ff5566",
+  },
 ];
 
 type EnemyLike = { position: [number, number, number]; flashTimer: number };
@@ -54,7 +90,10 @@ function updateTypeRefs(
       if (i < entities.length) {
         const e = entities[i];
         DUMMY.position.set(e.position[0], e.position[1], e.position[2]);
-        DUMMY.rotation.set(0, Math.PI, 0);
+        // Face the camera (+Z) with a nose-down, tail-up dive pose so the
+        // top of the hull reads toward the player — more aggressive and
+        // exposes more facet variation than the flat tail view.
+        DUMMY.rotation.set(0.22, 0, 0);
         DUMMY.scale.set(1, 1, 1);
         DUMMY.updateMatrix();
         ref.setMatrixAt(i, DUMMY.matrix);
@@ -73,15 +112,30 @@ function updateTypeRefs(
 
 type Part = { geometry: THREE.BufferGeometry; material: THREE.Material };
 
+// Converts a smooth-shaded geometry to flat shading so each triangle has its
+// own face normal. The vaporwave facet shader maps normal → color, so flat
+// normals make each face read as a distinct tint (gemstone/matcap look)
+// instead of the interpolated smooth-shaded wash from the original GLTF.
+function toFlatShaded(geo: THREE.BufferGeometry): THREE.BufferGeometry {
+  const flat = geo.toNonIndexed();
+  flat.computeVertexNormals();
+  return flat;
+}
+
 function buildParts(
   geos: THREE.BufferGeometry[],
-  palette: { baseColor: string; topTint: string; bottomTint: string }[],
+  palette: {
+    baseColor: string;
+    facetTintX: string;
+    facetTintY: string;
+    facetTintZ: string;
+  }[],
   emissiveIntensity: number,
   fallback: THREE.BufferGeometry,
 ): Part[] {
   const source = geos.length ? geos : [fallback];
   return source.map((geometry, i) => ({
-    geometry,
+    geometry: toFlatShaded(geometry),
     material: createVaporwaveMaterial({
       ...palette[i % palette.length],
       emissiveIntensity,
@@ -104,7 +158,7 @@ export const EnemyRenderer = () => {
       buildParts(
         extractSubmeshes(droneGltf.scene, DRONE_SIZE, 2),
         DRONE_PALETTE,
-        0.85,
+        1.0,
         new THREE.OctahedronGeometry(DRONE_SIZE / 2, 0),
       ),
     [droneGltf],
@@ -115,7 +169,7 @@ export const EnemyRenderer = () => {
       buildParts(
         extractSubmeshes(enemyGltf.scene, FIGHTER_SIZE, 2, "Hotrod"),
         FIGHTER_PALETTE,
-        0.95,
+        1.0,
         new THREE.ConeGeometry(FIGHTER_SIZE / 2, FIGHTER_SIZE, 5),
       ),
     [enemyGltf],
@@ -126,7 +180,7 @@ export const EnemyRenderer = () => {
       buildParts(
         extractSubmeshes(tankGltf.scene, TANK_SIZE, 2),
         TANK_PALETTE,
-        0.9,
+        1.0,
         new THREE.BoxGeometry(TANK_SIZE, TANK_SIZE, TANK_SIZE * 0.7),
       ),
     [tankGltf],
