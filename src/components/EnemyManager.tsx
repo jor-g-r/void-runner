@@ -17,6 +17,8 @@ const FIGHTER_FIRE_INTERVAL = 1.5;
 const TANK_CHARGE_TIME = 1.5;
 const TANK_STOP_Z = -20;
 const PICKUP_DROP_CHANCE = 0.4;
+const PLAYER_RADIUS = 0.6;
+const DRONE_RAM_DAMAGE = 25;
 
 interface ExplosionInstance {
   id: string;
@@ -112,10 +114,35 @@ export const EnemyManager = () => {
       let newTimer = enemy.stateTimer + delta;
       let newX = enemy.position[0];
       let newY = enemy.position[1];
-      let newZ = enemy.position[2] + enemy.velocity[2] * delta;
+      let newZ = enemy.position[2];
+
+      // Swoop-in entrance: ease position from entry origin to formation
+      // target, then flip to "approaching" so normal forward motion resumes.
+      if (newState === "entering") {
+        const ENTRY_DURATION = 1.1;
+        const t = Math.min(newTimer / ENTRY_DURATION, 1);
+        const ease = 1 - Math.pow(1 - t, 3);
+        const ox = enemy.entryOriginX ?? newX;
+        const oy = enemy.entryOriginY ?? newY;
+        const oz = enemy.entryOriginZ ?? newZ;
+        const fx = enemy.formationTargetX ?? newX;
+        const fy = enemy.formationTargetY ?? newY;
+        const fz = enemy.formationTargetZ ?? newZ;
+        newX = ox + (fx - ox) * ease;
+        newY = oy + (fy - oy) * ease;
+        newZ = oz + (fz - oz) * ease;
+        if (t >= 1) {
+          newState = "approaching";
+          newTimer = 0;
+        }
+      } else {
+        newZ = enemy.position[2] + enemy.velocity[2] * delta;
+      }
 
       if (enemy.type === "fighter") {
-        const sf = enemy.strafeFactor ?? 1;
+        const offX = enemy.strafeOffsetX ?? 0;
+        const offY = enemy.strafeOffsetY ?? 0;
+        const phase = enemy.strafePhase ?? 0;
 
         if (newState === "approaching" && newZ >= FIGHTER_STOP_Z) {
           newState = "attacking";
@@ -123,10 +150,25 @@ export const EnemyManager = () => {
         }
         if (newState === "attacking") {
           newZ = enemy.position[2];
-          const targetX = playerX * sf;
+
+          // Absolute-offset targeting: each fighter holds its own lane
+          // relative to the player, so two fighters never converge.
+          const targetX = playerX + offX;
+          // Y combines soft player-chase with a per-fighter sine so the
+          // swarm moves diagonally without feeling mechanical.
+          const targetY = playerY * 0.35 + offY + Math.sin(newTimer * 1.5 + phase) * 1.6;
+
           const dx = targetX - newX;
-          newX += Math.sign(dx) * 4 * delta;
+          const dy = targetY - newY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const strafeSpeed = 4;
+          if (dist > 0.01) {
+            const step = Math.min(strafeSpeed * delta, dist);
+            newX += (dx / dist) * step;
+            newY += (dy / dist) * step;
+          }
           newX = Math.max(-7, Math.min(7, newX));
+          newY = Math.max(-4, Math.min(4, newY));
 
           if (newTimer >= FIGHTER_FIRE_INTERVAL) {
             newTimer = 0;
@@ -163,6 +205,34 @@ export const EnemyManager = () => {
         }
       }
 
+      // Drone firing — 20% of drones shoot once their cooldown elapses.
+      // Set to Infinity after firing so they don't reload (one-shot fodder).
+      let newShootCooldown = enemy.shootCooldown;
+      if (enemy.type === "drone" && enemy.canShoot && newState === "approaching") {
+        newShootCooldown = (newShootCooldown ?? 0) - delta;
+        if (newShootCooldown <= 0) {
+          const dirX = (playerX - newX) * 0.5;
+          const dirY = (playerY - newY) * 0.5;
+          const bulletSpeed = 25;
+          state.fireEnemyProjectile(
+            [newX, newY, newZ],
+            [dirX * bulletSpeed * 0.1, dirY * bulletSpeed * 0.1, bulletSpeed],
+          );
+          newShootCooldown = Infinity;
+        }
+      }
+
+      // Drone ram damage — drones that collide with the player deal HP
+      // damage (shield-aware via damagePlayer) and explode on contact.
+      if (
+        enemy.type === "drone" &&
+        checkCollision([newX, newY, newZ], enemy.radius, [playerX, playerY, 0], PLAYER_RADIUS)
+      ) {
+        state.damagePlayer(DRONE_RAM_DAMAGE);
+        destroyed.push({ position: [newX, newY, newZ], score: 0 });
+        continue;
+      }
+
       if (newZ > 15) continue;
 
       updatedEnemies.push({
@@ -172,6 +242,7 @@ export const EnemyManager = () => {
         state: newState,
         stateTimer: newTimer,
         flashTimer: damage > 0 ? 0.08 : Math.max(0, enemy.flashTimer - delta),
+        shootCooldown: newShootCooldown,
       });
     }
 
