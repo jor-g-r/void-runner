@@ -40,7 +40,8 @@ export const MuteButton = () => {
       style={{
         position: "fixed",
         right: "20px",
-        bottom: "20px",
+        // Sits above the Vibe Jam 2026 widget badge in the corner.
+        bottom: "80px",
         width: "40px",
         height: "40px",
         display: "flex",
