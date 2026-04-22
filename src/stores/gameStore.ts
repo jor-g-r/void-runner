@@ -54,6 +54,7 @@ interface GameState {
   clearShake: () => void;
   startBarrelRoll: () => void;
   startGame: () => void;
+  beginPlaying: () => void;
   reset: () => void;
 }
 
@@ -307,8 +308,13 @@ export const useGameStore = create<GameState>((set) => ({
 
   startGame: () => {
     nextProjectileId = 0;
-    set({ ...INITIAL_STATE, phase: "playing" });
+    // Enter the controls modal first; this also mounts Game so GLTFs start
+    // loading while the player reads the legend. beginPlaying() starts the
+    // actual run once they dismiss.
+    set({ ...INITIAL_STATE, phase: "controls" });
   },
+
+  beginPlaying: () => set({ phase: "playing" }),
 
   reset: () => {
     nextProjectileId = 0;

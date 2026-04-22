@@ -1,4 +1,4 @@
-export type GamePhase = "title" | "playing" | "upgrading" | "gameover" | "victory";
+export type GamePhase = "title" | "controls" | "playing" | "upgrading" | "gameover" | "victory";
 
 export type EnemyType = "drone" | "fighter" | "tank";
 export type Formation = "v" | "line" | "diamond" | "random" | "surround";

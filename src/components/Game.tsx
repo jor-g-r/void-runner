@@ -53,7 +53,8 @@ export const Game = () => {
       <Environment />
       <ScreenShake />
 
-      {(phase === "playing" ||
+      {(phase === "controls" ||
+        phase === "playing" ||
         phase === "gameover" ||
         phase === "upgrading" ||
         phase === "victory") && (
