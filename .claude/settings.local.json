@@ -1,7 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:viteplus.dev)"
+      "WebFetch(domain:viteplus.dev)",
+      "Bash(node -e ':*)",
+      "Bash(cp -r \"/Users/user/Downloads/Void Runner Assets/lowpoly_-_spaceship/.\" \"/Users/user/LocalDocuments/sideprojects/Void Runner/public/models/player/\")",
+      "Bash(cp -r \"/Users/user/Downloads/Void Runner Assets/modular_lowpoly_spaceships/.\" \"/Users/user/LocalDocuments/sideprojects/Void Runner/public/models/enemies/\")",
+      "Bash(cp -r \"/Users/user/Downloads/Void Runner Assets/flying_ship/.\" \"/Users/user/LocalDocuments/sideprojects/Void Runner/public/models/boss/\")",
+      "Bash(agent-browser snapshot *)",
+      "Bash(agent-browser eval *)",
+      "Bash(agent-browser wait *)",
+      "Bash(agent-browser screenshot *)",
+      "Bash(agent-browser click *)",
+      "Bash(agent-browser find *)"
     ]
   }
 }
