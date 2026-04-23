@@ -41,3 +41,24 @@ export const lockPortrait = async () => {
     }
   }
 };
+
+export const lockLandscape = async () => {
+  const orientation = screen.orientation as ScreenOrientation & {
+    lock?: (o: OrientationLockType) => Promise<void>;
+  };
+  if (orientation?.lock) {
+    try {
+      await orientation.lock("landscape");
+    } catch {
+      // Same caveat as lockPortrait — swallow rejection silently.
+    }
+  }
+};
+
+// Enter fullscreen and immediately attempt to rotate the device to
+// landscape. Browsers that lack one or both APIs (notably iOS Safari)
+// silently no-op — the caller shouldn't branch on support.
+export const enterFullscreenLandscape = async () => {
+  await requestFullscreen();
+  await lockLandscape();
+};

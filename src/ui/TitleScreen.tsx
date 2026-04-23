@@ -1,8 +1,7 @@
 import { useRef, useState } from "react";
 import { useGameStore } from "../stores/gameStore";
 import { adoptIntroTrack, fadeOutMusic, playMusic, warmUpSfx } from "../systems/audio";
-import { isTouchDevice } from "../systems/platform";
-import { lockPortrait, requestFullscreen } from "../systems/fullscreen";
+import { enterFullscreenLandscape } from "../systems/fullscreen";
 
 const INTRO_TARGET_VOLUME = 0.55;
 const INTRO_FADE_IN_MS = 1200;
@@ -15,12 +14,6 @@ export const TitleScreen = () => {
 
   const activateAudio = () => {
     if (ready) return;
-    // The first tap is a user gesture — the only chance to request
-    // fullscreen and a portrait lock on mobile. Fire-and-forget; helpers
-    // no-op on desktop and unsupported browsers.
-    if (isTouchDevice()) {
-      void requestFullscreen().then(() => lockPortrait());
-    }
     const audio = introRef.current;
     if (!audio) return;
 
@@ -50,6 +43,11 @@ export const TitleScreen = () => {
     startGame();
   };
 
+  const handleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    void enterFullscreenLandscape();
+  };
+
   return (
     <div
       style={{
@@ -67,6 +65,35 @@ export const TitleScreen = () => {
       onClick={activateAudio}
     >
       <audio ref={introRef} src="/audio/stage-intro.mp3" loop preload="auto" />
+
+      <button
+        type="button"
+        onClick={handleFullscreen}
+        onPointerDown={(e) => e.stopPropagation()}
+        aria-label="Enter fullscreen (landscape)"
+        style={{
+          position: "fixed",
+          top: "12px",
+          left: "12px",
+          width: "40px",
+          height: "40px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(0, 20, 40, 0.5)",
+          border: "1px solid rgba(0, 221, 255, 0.4)",
+          borderRadius: "6px",
+          color: "#00ddff",
+          cursor: "pointer",
+          padding: 0,
+          boxShadow: "0 0 8px rgba(0, 170, 255, 0.3)",
+          zIndex: 10,
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+        </svg>
+      </button>
       <h1
         style={{
           fontFamily: "'Audiowide', cursive",

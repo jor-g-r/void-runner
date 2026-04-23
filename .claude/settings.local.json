@@ -12,7 +12,8 @@
       "Bash(agent-browser screenshot *)",
       "Bash(agent-browser click *)",
       "Bash(agent-browser find *)",
-      "Bash(agent-browser *)"
+      "Bash(agent-browser *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173)"
     ]
   }
 }
