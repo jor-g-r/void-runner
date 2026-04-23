@@ -1,15 +1,25 @@
 import { useEffect } from "react";
 import { useGameStore } from "../stores/gameStore";
+import { isTouchDevice } from "../systems/platform";
 
-const CONTROLS = [
+const KEYBOARD_CONTROLS = [
   { keys: ["MOUSE", "/", "WASD"], label: "MOVE" },
   { keys: ["DOUBLE-TAP", "A", "/", "D"], label: "BARREL ROLL" },
   { keys: ["HOLD", "SPACE"], label: "CHARGED SHOT" },
   { keys: ["AUTO-FIRE"], label: "ALWAYS ON" },
 ];
 
+const TOUCH_CONTROLS = [
+  { keys: ["JOYSTICK"], label: "MOVE" },
+  { keys: ["TAP", "ROLL"], label: "BARREL ROLL" },
+  { keys: ["HOLD", "CHARGE"], label: "CHARGED SHOT" },
+  { keys: ["AUTO-FIRE"], label: "ALWAYS ON" },
+];
+
 export const ControlsModal = () => {
   const beginPlaying = useGameStore((s) => s.beginPlaying);
+  const touch = isTouchDevice();
+  const controls = touch ? TOUCH_CONTROLS : KEYBOARD_CONTROLS;
 
   // Enter / Space as keyboard accelerator only — no "any key dismiss" so we
   // don't swallow the first input the player meant for gameplay.
@@ -40,8 +50,9 @@ export const ControlsModal = () => {
     >
       <div
         style={{
-          minWidth: "440px",
-          padding: "40px 56px 36px",
+          width: "min(440px, calc(100vw - 32px))",
+          boxSizing: "border-box",
+          padding: "clamp(24px, 6vw, 40px) clamp(24px, 7vw, 56px) clamp(20px, 5vw, 36px)",
           border: "1px solid rgba(0, 221, 255, 0.55)",
           borderRadius: "6px",
           background:
@@ -74,7 +85,7 @@ export const ControlsModal = () => {
             marginBottom: "32px",
           }}
         >
-          {CONTROLS.map((row) => (
+          {controls.map((row) => (
             <div
               key={row.label}
               style={{
@@ -148,15 +159,17 @@ export const ControlsModal = () => {
           >
             LAUNCH
           </button>
-          <span
-            style={{
-              color: "rgba(160, 200, 220, 0.55)",
-              fontSize: "11px",
-              letterSpacing: "3px",
-            }}
-          >
-            OR PRESS ENTER
-          </span>
+          {!touch && (
+            <span
+              style={{
+                color: "rgba(160, 200, 220, 0.55)",
+                fontSize: "11px",
+                letterSpacing: "3px",
+              }}
+            >
+              OR PRESS ENTER
+            </span>
+          )}
         </div>
       </div>
 

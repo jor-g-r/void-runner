@@ -7,10 +7,13 @@ import { GameOver } from "./ui/GameOver";
 import { Victory } from "./ui/Victory";
 import { UpgradeChoice } from "./ui/UpgradeChoice";
 import { MuteButton } from "./ui/MuteButton";
+import { TouchControls } from "./ui/TouchControls";
 import { useGameStore } from "./stores/gameStore";
+import { isTouchDevice } from "./systems/platform";
 
 const App = () => {
   const phase = useGameStore((s) => s.phase);
+  const touch = isTouchDevice();
 
   return (
     <div
@@ -18,7 +21,7 @@ const App = () => {
         position: "relative",
         width: "100%",
         height: "100%",
-        cursor: phase === "playing" ? "none" : "default",
+        cursor: phase === "playing" && !touch ? "none" : "default",
       }}
     >
       <Canvas camera={{ position: [0, 0, 10], fov: 60 }} style={{ position: "absolute", inset: 0 }}>
@@ -32,6 +35,7 @@ const App = () => {
         {phase === "upgrading" && <UpgradeChoice />}
         {phase === "gameover" && <GameOver />}
         {phase === "victory" && <Victory />}
+        {touch && phase === "playing" && <TouchControls />}
         <MuteButton />
       </div>
     </div>

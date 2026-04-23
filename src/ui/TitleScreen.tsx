@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { useGameStore } from "../stores/gameStore";
 import { adoptIntroTrack, fadeOutMusic, playMusic, warmUpSfx } from "../systems/audio";
+import { isTouchDevice } from "../systems/platform";
+import { lockPortrait, requestFullscreen } from "../systems/fullscreen";
 
 const INTRO_TARGET_VOLUME = 0.55;
 const INTRO_FADE_IN_MS = 1200;
@@ -13,6 +15,12 @@ export const TitleScreen = () => {
 
   const activateAudio = () => {
     if (ready) return;
+    // The first tap is a user gesture — the only chance to request
+    // fullscreen and a portrait lock on mobile. Fire-and-forget; helpers
+    // no-op on desktop and unsupported browsers.
+    if (isTouchDevice()) {
+      void requestFullscreen().then(() => lockPortrait());
+    }
     const audio = introRef.current;
     if (!audio) return;
 
@@ -62,10 +70,12 @@ export const TitleScreen = () => {
       <h1
         style={{
           fontFamily: "'Audiowide', cursive",
-          fontSize: "64px",
+          fontSize: "clamp(40px, 11vw, 64px)",
           fontWeight: 400,
           margin: 0,
-          letterSpacing: "8px",
+          padding: "0 16px",
+          letterSpacing: "clamp(4px, 1.5vw, 8px)",
+          textAlign: "center",
           background: "linear-gradient(180deg, #ff88cc 0%, #cc66ff 25%, #00ddff 60%, #4466ff 100%)",
           WebkitBackgroundClip: "text",
           WebkitTextFillColor: "transparent",

@@ -6,6 +6,7 @@ import { useGameStore } from "../stores/gameStore";
 import { extractGroupByName } from "../systems/modelUtils";
 import { createVaporwaveMaterial } from "../systems/vaporwaveMaterial";
 import { playSfx } from "../systems/audio";
+import { touchInput } from "../systems/touchInput";
 import * as THREE from "three";
 
 const BOUNDS_X = 8.2;
@@ -40,7 +41,8 @@ export const Player = () => {
   const currentY = useRef(0);
   const fireTimer = useRef(0);
   const usingKeyboard = useRef(false);
-  const chargeHeld = useRef(false);
+  const chargeHeldKb = useRef(false);
+  const wasCharging = useRef(false);
   const chargeTime = useRef(0);
   const barrelRollAngle = useRef(0);
   const lastTapA = useRef(0);
@@ -101,8 +103,7 @@ export const Player = () => {
         lastTapD.current = t;
       }
       if (key === " ") {
-        chargeHeld.current = true;
-        chargeTime.current = 0;
+        chargeHeldKb.current = true;
       }
     };
 
@@ -110,19 +111,7 @@ export const Player = () => {
       const key = e.key.toLowerCase();
       keys.delete(key);
       if (key === " ") {
-        chargeHeld.current = false;
-        if (chargeTime.current >= CHARGE_TIME) {
-          const state = useGameStore.getState();
-          const [px, py] = state.playerPosition;
-          fireCharged(px, py);
-          state.requestShake(0.08, 0.15);
-          playSfx("charge");
-        } else {
-          // Aborted charge — clear the glow state explicitly so the sphere
-          // doesn't linger at whatever partial level was last set.
-          useGameStore.setState({ chargeLevel: 0 });
-        }
-        chargeTime.current = 0;
+        chargeHeldKb.current = false;
       }
     };
 
@@ -146,11 +135,36 @@ export const Player = () => {
     const delta = Math.min(rawDelta, 0.1);
     const gameState = useGameStore.getState();
 
+    // Touch roll button is a one-shot pulse — consume it here.
+    if (touchInput.rollPulse) {
+      touchInput.rollPulse = false;
+      startBarrelRoll();
+    }
+
+    // Unified charge input: either keyboard space or touch charge button.
+    // Edge detection on release fires the charged shot (or aborts).
+    const isCharging = chargeHeldKb.current || touchInput.chargeHeld;
     const chargeSpeed = gameState.upgrades.includes("quickCharge") ? 2 : 1;
-    if (chargeHeld.current) {
+    if (isCharging && !wasCharging.current) {
+      chargeTime.current = 0;
+    }
+    if (isCharging) {
       chargeTime.current += delta * chargeSpeed;
       useGameStore.setState({ chargeLevel: Math.min(chargeTime.current / CHARGE_TIME, 1) });
+    } else if (wasCharging.current) {
+      if (chargeTime.current >= CHARGE_TIME) {
+        const [px, py] = gameState.playerPosition;
+        fireCharged(px, py);
+        gameState.requestShake(0.08, 0.15);
+        playSfx("charge");
+      } else {
+        // Aborted charge — clear the glow explicitly so the sphere doesn't
+        // linger at whatever partial level was last set.
+        useGameStore.setState({ chargeLevel: 0 });
+      }
+      chargeTime.current = 0;
     }
+    wasCharging.current = isCharging;
 
     const kbX =
       (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
@@ -159,7 +173,12 @@ export const Player = () => {
       (keys.has("w") || keys.has("arrowup") ? 1 : 0) -
       (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
 
-    if (usingKeyboard.current) {
+    if (touchInput.active) {
+      // Joystick + keyboard combine as velocity integration. Mouse ignored
+      // on touch devices — pointer events here come from the virtual pad.
+      targetX.current += (touchInput.axisX + kbX) * KEYBOARD_SPEED * delta;
+      targetY.current += (touchInput.axisY + kbY) * KEYBOARD_SPEED * delta;
+    } else if (usingKeyboard.current) {
       targetX.current += kbX * KEYBOARD_SPEED * delta;
       targetY.current += kbY * KEYBOARD_SPEED * delta;
     } else {
@@ -206,7 +225,7 @@ export const Player = () => {
     const wideShot = gameState.upgrades.includes("wideShot");
     const actualFireRate = rapidFire ? FIRE_RATE * 0.6 : FIRE_RATE;
 
-    if (!chargeHeld.current) {
+    if (!isCharging) {
       fireTimer.current -= delta;
       if (fireTimer.current <= 0) {
         fireTimer.current = actualFireRate;

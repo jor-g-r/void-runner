@@ -11,7 +11,8 @@
       "Bash(agent-browser wait *)",
       "Bash(agent-browser screenshot *)",
       "Bash(agent-browser click *)",
-      "Bash(agent-browser find *)"
+      "Bash(agent-browser find *)",
+      "Bash(agent-browser *)"
     ]
   }
 }

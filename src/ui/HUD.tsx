@@ -1,6 +1,5 @@
 import { useGameStore } from "../stores/gameStore";
 
-const HP_BAR_WIDTH = 220;
 const HP_BAR_HEIGHT = 12;
 
 export const HUD = () => {
@@ -24,25 +23,33 @@ export const HUD = () => {
         top: 0,
         left: 0,
         width: "100%",
-        padding: "20px 30px",
+        paddingTop: "clamp(10px, 3vw, 20px)",
+        paddingBottom: "clamp(10px, 3vw, 20px)",
+        paddingLeft: "clamp(12px, 4vw, 30px)",
+        // Right padding reserves space for the MuteButton on touch devices
+        // (top-right corner). Harmless on desktop where the mute lives in
+        // the opposite corner.
+        paddingRight: "clamp(60px, 14vw, 60px)",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "flex-start",
+        gap: "10px",
         pointerEvents: "none",
         fontFamily: "'Roboto', sans-serif",
         color: "#00ddff",
-        fontSize: "18px",
+        fontSize: "clamp(14px, 3.5vw, 18px)",
         textShadow: "0 0 10px #00aaff",
+        boxSizing: "border-box",
       }}
     >
-      <div>
-        <div style={{ fontSize: "14px", opacity: 0.7 }}>HULL</div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px" }}>
-          <div>
+      <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+        <div style={{ fontSize: "clamp(11px, 2.8vw, 14px)", opacity: 0.7 }}>HULL</div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
+          <div style={{ flex: "1 1 auto", minWidth: 0, maxWidth: "220px" }}>
             {/* HP bar */}
             <div
               style={{
-                width: `${HP_BAR_WIDTH}px`,
+                width: "100%",
                 height: `${HP_BAR_HEIGHT}px`,
                 background: "#220011",
                 border: "1px solid rgba(255, 85, 136, 0.3)",
@@ -64,7 +71,7 @@ export const HUD = () => {
             {shieldMaxHP > 0 && (
               <div
                 style={{
-                  width: `${HP_BAR_WIDTH}px`,
+                  width: "100%",
                   height: "4px",
                   background: "#001122",
                   borderRadius: "2px",
@@ -84,13 +91,20 @@ export const HUD = () => {
               </div>
             )}
           </div>
-          <div style={{ fontSize: "14px", opacity: 0.85, color: "#ff88aa" }}>
+          <div
+            style={{
+              fontSize: "clamp(11px, 2.8vw, 14px)",
+              opacity: 0.85,
+              color: "#ff88aa",
+              whiteSpace: "nowrap",
+            }}
+          >
             {Math.max(0, Math.ceil(playerHP))} / {playerMaxHP}
           </div>
         </div>
 
         {/* Barrel roll cooldown */}
-        <div style={{ fontSize: "12px", opacity: 0.5, marginTop: "10px" }}>
+        <div style={{ fontSize: "clamp(10px, 2.5vw, 12px)", opacity: 0.5, marginTop: "10px" }}>
           ROLL {barrelRollCooldown > 0 ? `${barrelRollCooldown.toFixed(1)}s` : "READY"}
         </div>
       </div>
@@ -138,12 +152,12 @@ export const HUD = () => {
         </div>
       )}
 
-      <div style={{ textAlign: "right" }}>
-        <div style={{ fontSize: "14px", opacity: 0.7 }}>SCORE</div>
-        <div style={{ fontSize: "24px", fontWeight: "bold" }}>
+      <div style={{ textAlign: "right", flex: "0 0 auto", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: "clamp(11px, 2.8vw, 14px)", opacity: 0.7 }}>SCORE</div>
+        <div style={{ fontSize: "clamp(16px, 4.5vw, 24px)", fontWeight: "bold" }}>
           {score.toString().padStart(8, "0")}
         </div>
-        <div style={{ fontSize: "14px", opacity: 0.7, marginTop: "8px" }}>
+        <div style={{ fontSize: "clamp(11px, 2.8vw, 14px)", opacity: 0.7, marginTop: "8px" }}>
           ENERGY {energy} {upgrades.length > 0 && `| +${upgrades.length}`}
         </div>
       </div>

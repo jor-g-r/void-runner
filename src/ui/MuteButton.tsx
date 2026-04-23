@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { isMuted, subscribeMuted, toggleMuted } from "../systems/audio";
+import { isTouchDevice } from "../systems/platform";
 
 const SpeakerOn = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
@@ -31,6 +32,11 @@ export const MuteButton = () => {
     toggleMuted();
   };
 
+  // On touch devices the bottom-right corner is claimed by the virtual
+  // CHARGE button, so the mute control moves to the top-right where it
+  // doesn't fight with gameplay input.
+  const touch = isTouchDevice();
+
   return (
     <button
       type="button"
@@ -39,9 +45,9 @@ export const MuteButton = () => {
       aria-label={muted ? "Unmute audio" : "Mute audio"}
       style={{
         position: "fixed",
-        right: "20px",
-        // Sits above the Vibe Jam 2026 widget badge in the corner.
-        bottom: "80px",
+        right: touch ? "12px" : "20px",
+        // Desktop: above the Vibe Jam widget badge. Mobile: top-right corner.
+        ...(touch ? { top: "12px" } : { bottom: "80px" }),
         width: "40px",
         height: "40px",
         display: "flex",
