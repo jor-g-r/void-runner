@@ -12,6 +12,17 @@ type FSElem = HTMLElement & {
   webkitRequestFullscreen?: () => Promise<void>;
 };
 
+// True when the running browser exposes the Fullscreen API on regular
+// elements. iOS Safari (and therefore every iPhone browser) returns
+// false here — they only allow fullscreen on <video>.
+export const isFullscreenSupported = () => {
+  if (typeof document === "undefined") return false;
+  const el = document.documentElement as FSElem;
+  return (
+    typeof el.requestFullscreen === "function" || typeof el.webkitRequestFullscreen === "function"
+  );
+};
+
 export const requestFullscreen = async () => {
   if (typeof document === "undefined") return;
   const doc = document as FSDoc;

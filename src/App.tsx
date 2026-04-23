@@ -8,6 +8,7 @@ import { Victory } from "./ui/Victory";
 import { UpgradeChoice } from "./ui/UpgradeChoice";
 import { MuteButton } from "./ui/MuteButton";
 import { TouchControls } from "./ui/TouchControls";
+import { RotatePrompt } from "./ui/RotatePrompt";
 import { useGameStore } from "./stores/gameStore";
 import { isTouchDevice } from "./systems/platform";
 
@@ -37,6 +38,7 @@ const App = () => {
         {phase === "victory" && <Victory />}
         {touch && phase === "playing" && <TouchControls />}
         <MuteButton />
+        <RotatePrompt />
       </div>
     </div>
   );
