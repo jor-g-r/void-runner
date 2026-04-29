@@ -39,6 +39,12 @@ interface GameState {
   // Screen shake
   shakeRequest: ShakeRequest | null;
 
+  // Leaderboard run metadata
+  runStartedAt: number | null;
+  deaths: number;
+  scoreSubmitted: boolean;
+  playerName: string;
+
   tick: (delta: number) => void;
   setPlayerPosition: (pos: [number, number]) => void;
   firePlayerProjectile: (x: number, y: number, vx?: number) => void;
@@ -56,6 +62,8 @@ interface GameState {
   startGame: () => void;
   beginPlaying: () => void;
   reset: () => void;
+  setPlayerName: (name: string) => void;
+  markScoreSubmitted: () => void;
 }
 
 const INITIAL_STATE = {
@@ -83,13 +91,37 @@ const INITIAL_STATE = {
   asteroids: [] as AsteroidData[],
   waveIndex: 0,
   shakeRequest: null as ShakeRequest | null,
+  runStartedAt: null as number | null,
+  deaths: 0,
+  scoreSubmitted: false,
 };
 
 // Shield recovers to full this many seconds after the last damage taken.
 const SHIELD_REGEN_DELAY = 6;
 
+const PLAYER_NAME_STORAGE_KEY = "voidrunner.playerName";
+
+const loadPlayerName = (): string => {
+  if (typeof localStorage === "undefined") return "";
+  try {
+    return localStorage.getItem(PLAYER_NAME_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+};
+
+const savePlayerName = (name: string): void => {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(PLAYER_NAME_STORAGE_KEY, name);
+  } catch {
+    // ignore quota / privacy-mode failures
+  }
+};
+
 export const useGameStore = create<GameState>((set) => ({
   ...INITIAL_STATE,
+  playerName: loadPlayerName(),
 
   tick: (rawDelta) =>
     set((state) => {
@@ -274,6 +306,7 @@ export const useGameStore = create<GameState>((set) => ({
         remaining -= absorbed;
       }
       const newHP = state.playerHP - remaining;
+      const died = newHP <= 0;
       playSfx("hurt");
       return {
         playerHP: newHP,
@@ -281,7 +314,8 @@ export const useGameStore = create<GameState>((set) => ({
         shieldRegenTimer: state.shieldMaxHP > 0 ? SHIELD_REGEN_DELAY : 0,
         isInvulnerable: true,
         invulnerableTimer: 1.5,
-        phase: newHP <= 0 ? "gameover" : state.phase,
+        phase: died ? "gameover" : state.phase,
+        deaths: died ? state.deaths + 1 : state.deaths,
         shakeRequest: { intensity: 0.15, duration: 0.3 },
       };
     }),
@@ -310,14 +344,21 @@ export const useGameStore = create<GameState>((set) => ({
     nextProjectileId = 0;
     // Enter the controls modal first; this also mounts Game so GLTFs start
     // loading while the player reads the legend. beginPlaying() starts the
-    // actual run once they dismiss.
-    set({ ...INITIAL_STATE, phase: "controls" });
+    // actual run once they dismiss. playerName is preserved across runs.
+    set((state) => ({ ...INITIAL_STATE, phase: "controls", playerName: state.playerName }));
   },
 
-  beginPlaying: () => set({ phase: "playing" }),
+  beginPlaying: () => set({ phase: "playing", runStartedAt: Date.now() }),
 
   reset: () => {
     nextProjectileId = 0;
-    set({ ...INITIAL_STATE });
+    set((state) => ({ ...INITIAL_STATE, playerName: state.playerName }));
   },
+
+  setPlayerName: (name) => {
+    savePlayerName(name);
+    set({ playerName: name });
+  },
+
+  markScoreSubmitted: () => set({ scoreSubmitted: true }),
 }));

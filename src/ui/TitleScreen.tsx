@@ -1,7 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGameStore } from "../stores/gameStore";
 import { adoptIntroTrack, fadeOutMusic, playMusic, warmUpSfx } from "../systems/audio";
 import { enterFullscreenLandscape, isFullscreenSupported } from "../systems/fullscreen";
+import { fetchTopScores, type ScoreRow } from "../lib/leaderboard";
+import { isLeaderboardEnabled } from "../lib/supabase";
+import { Leaderboard } from "./Leaderboard";
 
 const INTRO_TARGET_VOLUME = 0.55;
 const INTRO_FADE_IN_MS = 1200;
@@ -11,6 +14,20 @@ export const TitleScreen = () => {
   const introRef = useRef<HTMLAudioElement>(null);
   const fadeRaf = useRef(0);
   const [ready, setReady] = useState(false);
+  const [topScores, setTopScores] = useState<ScoreRow[] | null>(() =>
+    isLeaderboardEnabled() ? null : [],
+  );
+
+  useEffect(() => {
+    if (!isLeaderboardEnabled()) return;
+    let cancelled = false;
+    void fetchTopScores().then((data) => {
+      if (!cancelled) setTopScores(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const activateAudio = () => {
     if (ready) return;
@@ -149,6 +166,10 @@ export const TitleScreen = () => {
           CLICK ANYWHERE
         </p>
       )}
+
+      <div style={{ marginTop: "40px" }} onClick={(e) => e.stopPropagation()}>
+        <Leaderboard rows={topScores} compact />
+      </div>
 
       <style>{`
         @keyframes pulse {
