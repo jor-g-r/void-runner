@@ -209,6 +209,7 @@ export const Boss = () => {
           ["drone", "drone"],
           "line" as const,
           Math.random() < 0.5 ? ("left" as const) : ("right" as const),
+          state.time,
         );
         for (const d of drones) {
           d.position[2] = bs.position[2];

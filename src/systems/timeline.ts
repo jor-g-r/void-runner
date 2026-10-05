@@ -75,6 +75,7 @@ export function spawnWave(
   enemies: EnemyType[],
   formation: Formation,
   position: SpawnSide,
+  time: number,
 ): EnemyData[] {
   const offsets = getFormationOffsets(enemies.length, formation);
   const baseX = getBaseX(position);
@@ -137,10 +138,12 @@ export function spawnWave(
       state = "approaching";
     }
 
-    // 20% of drones are shooters. Cooldown is tight (0.2–0.8s after entering
-    // formation) because drones only live ~2s post-swoop before despawning
-    // past the player — any longer and most shooter-drones never fire.
-    const canShoot = type === "drone" && Math.random() < 0.2;
+    // 20% of drones are shooters, but only once fighters are on the board
+    // (time >= 45) so the warm-up stays pure movement-and-shooting practice.
+    // Cooldown is tight (0.2–0.8s after entering formation) because drones
+    // only live ~2s post-swoop before despawning past the player — any
+    // longer and most shooter-drones never fire.
+    const canShoot = type === "drone" && time >= 45 && Math.random() < 0.2;
     const shootCooldown = canShoot ? 0.2 + Math.random() * 0.6 : undefined;
 
     result.push({

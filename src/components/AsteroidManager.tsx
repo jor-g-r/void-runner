@@ -11,13 +11,14 @@ const PLAYER_RADIUS = 0.6;
 
 let nextAsteroidId = 0;
 
-// Spawn times during the level (seconds)
+// Spawn times during the level (seconds). Aligned to the wave-timeline beats:
+// intro is 0–15s, so the first rocks arrive during the warm-up.
 const ASTEROID_SPAWNS = [
-  { time: 12, count: 2 },
-  { time: 35, count: 3 },
-  { time: 60, count: 2 },
-  { time: 85, count: 4 },
-  { time: 108, count: 3 },
+  { time: 22, count: 2 },
+  { time: 48, count: 3 },
+  { time: 72, count: 2 },
+  { time: 98, count: 4 },
+  { time: 128, count: 3 },
 ];
 
 export const AsteroidManager = () => {
@@ -37,7 +38,7 @@ export const AsteroidManager = () => {
       lastResetTime.current = 0;
     }
 
-    let asteroids = [...state.asteroids];
+    const asteroids = [...state.asteroids];
     const [px, py] = state.playerPosition;
     const playerPos: [number, number, number] = [px, py, 0];
 

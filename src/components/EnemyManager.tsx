@@ -13,12 +13,13 @@ import { ScorePopup } from "./ScorePopup";
 import type { EnemyData } from "../types";
 
 const FIGHTER_STOP_Z = -15;
-const FIGHTER_FIRE_INTERVAL = 1.5;
+const FIGHTER_FIRE_INTERVAL = 2.4;
+const FIGHTER_RETREAT_TIME = 8;
 const TANK_CHARGE_TIME = 1.5;
 const TANK_STOP_Z = -20;
 const PICKUP_DROP_CHANCE = 0.4;
 const PLAYER_RADIUS = 0.6;
-const DRONE_RAM_DAMAGE = 25;
+const DRONE_RAM_DAMAGE = 15;
 
 interface ExplosionInstance {
   id: string;
@@ -58,7 +59,7 @@ export const EnemyManager = () => {
     }
     lastTime.current = state.time;
 
-    let enemies = [...state.enemies];
+    const enemies = [...state.enemies];
     const [playerX, playerY] = state.playerPosition;
 
     // --- Wave timeline spawning ---
@@ -67,7 +68,7 @@ export const EnemyManager = () => {
 
     while (waveIndex < LEVEL_WAVES.length && LEVEL_WAVES[waveIndex].time <= currentTime) {
       const wave = LEVEL_WAVES[waveIndex];
-      const spawned = spawnWave(wave.enemies, wave.formation, wave.position);
+      const spawned = spawnWave(wave.enemies, wave.formation, wave.position, wave.time);
       enemies.push(...spawned);
       waveIndex++;
     }
@@ -170,8 +171,15 @@ export const EnemyManager = () => {
           newX = Math.max(-7, Math.min(7, newX));
           newY = Math.max(-4, Math.min(4, newY));
 
-          if (newTimer >= FIGHTER_FIRE_INTERVAL) {
+          // Attack for one bounded burst, then fly past the player and leave
+          // the screen — fighters never stack up wave after wave.
+          if (newTimer >= FIGHTER_RETREAT_TIME) {
+            newState = "retreating";
             newTimer = 0;
+          } else if (
+            Math.floor(newTimer / FIGHTER_FIRE_INTERVAL) >
+            Math.floor(enemy.stateTimer / FIGHTER_FIRE_INTERVAL)
+          ) {
             const dirX = (playerX - newX) * 0.5;
             const dirY = (playerY - newY) * 0.5;
             const speed = 30;

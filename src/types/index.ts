@@ -22,7 +22,7 @@ export interface EnemyData {
   maxHp: number;
   position: [number, number, number];
   velocity: [number, number, number];
-  state: "entering" | "approaching" | "attacking" | "strafing" | "charging";
+  state: "entering" | "approaching" | "attacking" | "strafing" | "charging" | "retreating";
   stateTimer: number;
   radius: number;
   flashTimer: number;
