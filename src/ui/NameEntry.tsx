@@ -9,7 +9,7 @@ type Props = {
 };
 
 const ALLOWED_CHAR = /[A-Za-z0-9 _.-]/;
-const MIN_LEN = 3;
+const MIN_LEN = 6;
 const MAX_LEN = 12;
 
 const sanitize = (raw: string): string => {
@@ -82,7 +82,7 @@ export const NameEntry = ({ initialName, submitting, error, onSubmit }: Props) =
           setName(sanitize(e.target.value));
           setLocalError(null);
         }}
-        placeholder="ACE"
+        placeholder="NEBULA"
         style={{
           fontFamily: "'Audiowide', cursive",
           fontSize: "22px",

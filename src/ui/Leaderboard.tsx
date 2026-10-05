@@ -32,7 +32,7 @@ export const Leaderboard = ({
         borderRadius: "6px",
         padding: compact ? "12px 14px" : "16px 20px",
         boxShadow: "0 0 18px rgba(0, 170, 255, 0.25), inset 0 0 18px rgba(120, 0, 200, 0.15)",
-        minWidth: compact ? "260px" : "340px",
+        minWidth: compact ? "300px" : "380px",
       }}
     >
       <div
@@ -67,7 +67,7 @@ export const Leaderboard = ({
                 key={row.id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "24px 1fr auto auto",
+                  gridTemplateColumns: "24px 1fr auto auto auto",
                   gap: "10px",
                   alignItems: "center",
                   padding: "4px 6px",
@@ -83,14 +83,22 @@ export const Leaderboard = ({
                   style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                 >
                   {row.name}
-                  {row.victory && (
-                    <span style={{ marginLeft: "6px", color: "#00ffaa", fontSize: "10px" }}>★</span>
-                  )}
                 </span>
                 <span
                   style={{ fontVariantNumeric: "tabular-nums", opacity: 0.7, fontSize: "11px" }}
                 >
                   {formatDuration(row.run_duration_ms)}
+                </span>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    letterSpacing: "1px",
+                    color: row.victory ? "#00ffaa" : "#bfeaff",
+                    opacity: row.victory ? 1 : 0.35,
+                    textShadow: row.victory ? "0 0 8px rgba(0, 255, 170, 0.6)" : "none",
+                  }}
+                >
+                  {row.victory ? "CLEAR" : "—"}
                 </span>
                 <span style={{ fontVariantNumeric: "tabular-nums", color: "#00ffcc" }}>
                   {formatScore(row.score)}
