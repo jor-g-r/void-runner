@@ -132,7 +132,7 @@ src/lib/
 
 src/ui/
   Leaderboard.tsx    ← top-10 list, reused in title + end screens
-  NameEntry.tsx      ← 6–12 char input shown on Victory / GameOver
+  NameEntry.tsx      ← 3–12 char input shown on Victory / GameOver
 ```
 
 ### 4.2 API surface
@@ -212,6 +212,7 @@ Today is 2026-04-27. Deadline is 2026-05-01. D1–D4 fit; D5 is the safety margi
 - Profanity list source: hand-rolled vs. an existing tiny npm package?
 - Should we display `victory` runs separately from death runs, or mix them?
   Resolved 2026-10-05: mixed, sorted by score only — a `CLEAR` column on the
-  leaderboard marks victory runs (dim `—` otherwise). Name minimum raised to
-  6 characters.
+  leaderboard marks victory runs (dim `—` otherwise). Name minimum stays at
+  3 characters (a 6-char minimum was tried and reverted the same day — short
+  arcade tags win).
 - Show the player's all-time best locally even if not in global top 10? (Nice-to-have, defer.)
