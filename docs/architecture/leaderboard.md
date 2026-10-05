@@ -52,7 +52,9 @@ create index scores_leaderboard_idx on public.scores (score desc, created_at asc
 ```
 
 `score_vs_time` is a soft sanity bound — current scoring caps well below this.
-Tighten if real run telemetry shows a tighter ceiling.
+Measured against real rows (2026-10-05): observed rate ≈ 0.03 pts/ms, ~30×
+below the ceiling. Exonerated as the cause of the 2026-05 submit failures
+(§2.4). No change needed.
 
 ### 2.2 Row Level Security
 
@@ -82,6 +84,20 @@ VITE_SUPABASE_ANON_KEY=<anon-key>
 ```
 
 Anon key is safe to ship in the client bundle. Never ship the service-role key.
+
+### 2.4 Free-tier pausing (operational note)
+
+Supabase free-tier projects pause after ~1 week of inactivity. A paused project
+stops resolving DNS (`NXDOMAIN` on `<project>.supabase.co`), so every request
+fails: fetches return `[]` (board reads as empty) and submits surface
+"SUBMIT FAILED". The client degrades silently by design — gameplay is never
+blocked. Fix: resume the project from the Supabase dashboard.
+
+This was the root cause of the submit failures documented on 2026-05-25 (the
+`score_vs_time` constraint and the `runStartedAt` guard were both exonerated).
+Resolved 2026-10-05 by resuming the project; `useEndRunSubmit.ts` and
+`leaderboard.ts` now log the underlying error so the next outage is
+diagnosable from devtools.
 
 ---
 

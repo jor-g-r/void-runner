@@ -56,6 +56,9 @@ export async function fetchTopScores(limit = 10): Promise<ScoreRow[]> {
     .order("created_at", { ascending: true })
     .limit(limit);
 
-  if (error || !data) return [];
+  if (error || !data) {
+    console.warn("[leaderboard] fetch failed", error);
+    return [];
+  }
   return data as ScoreRow[];
 }

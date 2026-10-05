@@ -41,7 +41,12 @@ export function useEndRunSubmit(victory: boolean): EndRunState {
   }, [enabled]);
 
   const submit = async (name: string) => {
-    if (!enabled || runStartedAt === null || submitting) return;
+    if (!enabled || submitting) return;
+    if (runStartedAt === null) {
+      console.warn("[leaderboard] submit skipped: runStartedAt is null");
+      setError("SUBMIT FAILED — TRY AGAIN");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -58,7 +63,8 @@ export function useEndRunSubmit(victory: boolean): EndRunState {
       markScoreSubmitted();
       setRows(result.top);
       setHighlightId(result.id);
-    } catch {
+    } catch (e) {
+      console.error("[leaderboard] submit failed", e);
       setError("SUBMIT FAILED — TRY AGAIN");
     } finally {
       setSubmitting(false);
