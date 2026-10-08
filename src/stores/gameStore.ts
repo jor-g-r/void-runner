@@ -47,8 +47,8 @@ interface GameState {
 
   tick: (delta: number) => void;
   setPlayerPosition: (pos: [number, number]) => void;
-  firePlayerProjectile: (x: number, y: number, vx?: number) => void;
-  fireChargedShot: (x: number, y: number) => void;
+  firePlayerProjectile: (x: number, y: number, vx?: number, z?: number) => void;
+  fireChargedShot: (x: number, y: number, z?: number) => void;
   fireEnemyProjectile: (pos: [number, number, number], vel: [number, number, number]) => void;
   spawnEnemy: (enemy: EnemyData) => void;
   spawnPickup: (pos: [number, number, number]) => void;
@@ -209,14 +209,14 @@ export const useGameStore = create<GameState>((set) => ({
 
   setPlayerPosition: (pos) => set({ playerPosition: pos }),
 
-  firePlayerProjectile: (x, y, vx = 0) =>
+  firePlayerProjectile: (x, y, vx = 0, z = -2) =>
     set((state) => ({
       playerProjectiles: [
         ...state.playerProjectiles,
         {
           id: `pp-${nextProjectileId++}`,
           active: true,
-          position: [x, y, -2] as [number, number, number],
+          position: [x, y, z] as [number, number, number],
           velocity: [vx, 0, -200] as [number, number, number],
           lifetime: 2,
           owner: "player" as const,
@@ -224,14 +224,14 @@ export const useGameStore = create<GameState>((set) => ({
       ],
     })),
 
-  fireChargedShot: (x, y) =>
+  fireChargedShot: (x, y, z = -2) =>
     set((state) => ({
       playerProjectiles: [
         ...state.playerProjectiles,
         {
           id: `pp-${nextProjectileId++}`,
           active: true,
-          position: [x, y, -2] as [number, number, number],
+          position: [x, y, z] as [number, number, number],
           velocity: [0, 0, -150] as [number, number, number],
           lifetime: 3,
           owner: "player" as const,

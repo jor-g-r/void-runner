@@ -24,6 +24,7 @@ const BOSS_HP = 50;
 const WEAK_POINT_RADIUS = 1.2;
 const BOSS_Z = -30;
 const ENTRY_SPEED = 5;
+const BOSS_MODEL_ROTATION: [number, number, number] = [1.25, 7.87545984, -1.13453552];
 
 // Phase 1: spreads + drone spawns
 const P1_FIRE_INTERVAL = 2;
@@ -283,31 +284,33 @@ export const Boss = () => {
 
   return (
     <group ref={groupRef} visible={false}>
-      {model && <primitive object={model} rotation={[0, Math.PI, 0]} />}
+      <group rotation={BOSS_MODEL_ROTATION}>
+        {model && <primitive object={model} />}
 
-      {/* Weak point — glowing core */}
-      <mesh position={[0, 0, 1]}>
-        <sphereGeometry args={[0.6, 12, 12]} />
-        <meshStandardMaterial
-          ref={weakPointMatRef}
-          color="#ff00ff"
-          emissive="#ff00ff"
-          emissiveIntensity={3}
-          toneMapped={false}
-        />
-      </mesh>
+        {/* Weak point — glowing core */}
+        <mesh position={[0, 0, 1]}>
+          <sphereGeometry args={[0.6, 12, 12]} />
+          <meshStandardMaterial
+            ref={weakPointMatRef}
+            color="#ff00ff"
+            emissive="#ff00ff"
+            emissiveIntensity={3}
+            toneMapped={false}
+          />
+        </mesh>
 
-      {/* Hit halo — expanding white ring on damage */}
-      <mesh ref={haloRef} position={[0, 0, 1]} visible={false}>
-        <sphereGeometry args={[0.7, 16, 16]} />
-        <meshBasicMaterial
-          ref={haloMatRef}
-          color="#ffffff"
-          transparent
-          opacity={0.7}
-          toneMapped={false}
-        />
-      </mesh>
+        {/* Hit halo — expanding white ring on damage */}
+        <mesh ref={haloRef} position={[0, 0, 1]} visible={false}>
+          <sphereGeometry args={[0.7, 16, 16]} />
+          <meshBasicMaterial
+            ref={haloMatRef}
+            color="#ffffff"
+            transparent
+            opacity={0.7}
+            toneMapped={false}
+          />
+        </mesh>
+      </group>
 
       {/* HP bar — fill scales rightward as boss takes damage */}
       <group position={[0, -2.5, 0]}>

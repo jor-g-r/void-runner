@@ -52,6 +52,7 @@ export function createVaporwaveMaterial(
     emissiveIntensity: emissiveIntensity * 0.35,
     metalness: 0.25,
     roughness: 0.55,
+    side: THREE.DoubleSide,
   });
 
   material.onBeforeCompile = (shader) => {
@@ -142,7 +143,7 @@ export function createVaporwaveMaterial(
       // surfaces a polished-metal read without washing saturated tints.
       float chrome = pow(max(0.0, dot(vWorldNormal, vViewDir)), 8.0);
       vec3 vaporEmissive =
-        facetColor * (0.8 + scan * 0.25 + fresnel * 0.4) + chrome * 0.45;
+        facetColor * (0.8 + scan * 0.25 + fresnel * 0.4) + chrome * 0.25;
       totalEmissiveRadiance = vaporEmissive;
       #else
       // Vertical gradient + scan/rim accents. Keeps the lit diffuse dominant

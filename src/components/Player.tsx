@@ -19,6 +19,10 @@ const FIRE_RATE = 1 / 8;
 const KEYBOARD_SPEED = 14;
 const CHARGE_TIME = 1.0;
 const DOUBLE_TAP_WINDOW = 0.3;
+const PLAYER_MODEL_ROTATION: [number, number, number] = [0, Math.PI, 0];
+const LEFT_MUZZLE = new THREE.Vector3(-0.06, -0.06, 0.82);
+const RIGHT_MUZZLE = new THREE.Vector3(0.06, -0.06, 0.82);
+const CHARGED_MUZZLE = new THREE.Vector3(0, -0.06, 0.9);
 
 const keys = new Set<string>();
 
@@ -79,6 +83,19 @@ export const Player = () => {
     });
     return group;
   }, [gltf]);
+
+  const getWorldMuzzlePosition = (localPosition: THREE.Vector3) => {
+    if (!groupRef.current || !playerModel) {
+      return new THREE.Vector3(
+        currentX.current + localPosition.x,
+        currentY.current + localPosition.y,
+        -2,
+      );
+    }
+
+    groupRef.current.updateWorldMatrix(true, true);
+    return playerModel.localToWorld(localPosition.clone());
+  };
 
   useEffect(() => {
     const now = () => performance.now() / 1000;
@@ -153,8 +170,8 @@ export const Player = () => {
       useGameStore.setState({ chargeLevel: Math.min(chargeTime.current / CHARGE_TIME, 1) });
     } else if (wasCharging.current) {
       if (chargeTime.current >= CHARGE_TIME) {
-        const [px, py] = gameState.playerPosition;
-        fireCharged(px, py);
+        const muzzle = getWorldMuzzlePosition(CHARGED_MUZZLE);
+        fireCharged(muzzle.x, muzzle.y, muzzle.z);
         gameState.requestShake(0.08, 0.15);
         playSfx("charge");
       } else {
@@ -229,13 +246,15 @@ export const Player = () => {
       fireTimer.current -= delta;
       if (fireTimer.current <= 0) {
         fireTimer.current = actualFireRate;
-        fireProjectile(currentX.current - 0.2, currentY.current);
-        fireProjectile(currentX.current + 0.2, currentY.current);
+        const leftMuzzle = getWorldMuzzlePosition(LEFT_MUZZLE);
+        const rightMuzzle = getWorldMuzzlePosition(RIGHT_MUZZLE);
+        fireProjectile(leftMuzzle.x, leftMuzzle.y, 0, leftMuzzle.z);
+        fireProjectile(rightMuzzle.x, rightMuzzle.y, 0, rightMuzzle.z);
         if (wideShot) {
           // vx=50 gives a visible ~14° spread that actually reaches enemies
           // a few units off-axis at mid-range (z ~ -20).
-          fireProjectile(currentX.current - 0.4, currentY.current, -50);
-          fireProjectile(currentX.current + 0.4, currentY.current, 50);
+          fireProjectile(leftMuzzle.x, leftMuzzle.y, -50, leftMuzzle.z);
+          fireProjectile(rightMuzzle.x, rightMuzzle.y, 50, rightMuzzle.z);
         }
         playSfx("shoot");
       }
@@ -246,7 +265,7 @@ export const Player = () => {
 
   return (
     <group ref={groupRef} position={[0, 0, 0]}>
-      {playerModel && <primitive object={playerModel} rotation={[0, Math.PI, 0]} />}
+      {playerModel && <primitive object={playerModel} rotation={PLAYER_MODEL_ROTATION} />}
 
       {/* Engine glow */}
       <mesh position={[0, 0, 0.5]}>

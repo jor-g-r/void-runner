@@ -11,8 +11,9 @@ import { TouchControls } from "./ui/TouchControls";
 import { DesktopOnlyPrompt } from "./ui/DesktopOnlyPrompt";
 import { useGameStore } from "./stores/gameStore";
 import { isTouchDevice } from "./systems/platform";
+import { Showcase } from "./ui/Showcase";
 
-const App = () => {
+const GameApp = () => {
   const phase = useGameStore((s) => s.phase);
   const touch = isTouchDevice();
 
@@ -43,5 +44,8 @@ const App = () => {
     </div>
   );
 };
+
+const App = () =>
+  window.location.pathname.replace(/\/+$/, "") === "/showcase" ? <Showcase /> : <GameApp />;
 
 export default App;

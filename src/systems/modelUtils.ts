@@ -23,9 +23,7 @@ export function normalizeGeometry(
   cloned.translate(-center.x, -center.y, -center.z);
 
   // Find which axis is the longest — that's the ship's "forward" axis
-  const longestAxis =
-    size.x >= size.y && size.x >= size.z ? "x" :
-    size.y >= size.z ? "y" : "z";
+  const longestAxis = size.x >= size.y && size.x >= size.z ? "x" : size.y >= size.z ? "y" : "z";
 
   // Rotate so the longest axis aligns with +Z (the "nose toward camera" axis)
   const rot = new THREE.Matrix4();
@@ -140,10 +138,7 @@ export function extractGroupByName(
  * with world transforms baked, re-centered, normalized, and aligned
  * so the longest axis points along +Z.
  */
-export function extractEntireScene(
-  scene: THREE.Object3D,
-  targetSize: number,
-): THREE.Group | null {
+export function extractEntireScene(scene: THREE.Object3D, targetSize: number): THREE.Group | null {
   scene.updateMatrixWorld(true);
 
   const meshes: { geometry: THREE.BufferGeometry; material: THREE.Material }[] = [];
@@ -173,9 +168,7 @@ export function extractEntireScene(
   combinedBox.getCenter(center);
 
   // Determine longest axis and compute rotation to align it with +Z
-  const longestAxis =
-    size.x >= size.y && size.x >= size.z ? "x" :
-    size.y >= size.z ? "y" : "z";
+  const longestAxis = size.x >= size.y && size.x >= size.z ? "x" : size.y >= size.z ? "y" : "z";
 
   const alignRot = new THREE.Matrix4();
   if (longestAxis === "x") {
@@ -255,30 +248,31 @@ export function extractSubmeshes(
   scene: THREE.Object3D,
   targetSize: number,
   maxCount: number,
-  groupName?: string,
+  groupName?: string | string[],
 ): THREE.BufferGeometry[] {
   scene.updateMatrixWorld(true);
 
-  // Pick the subtree to walk: a named node if provided, otherwise the whole scene.
-  let root: THREE.Object3D = scene;
+  // Extract a named assembly or several of its modular parts from the scene.
+  const roots: THREE.Object3D[] = [];
   if (groupName) {
-    let found: THREE.Object3D | null = null;
+    const names = Array.isArray(groupName) ? groupName : [groupName];
     scene.traverse((child) => {
-      if (!found && child.name.includes(groupName)) found = child;
+      if (names.includes(child.name)) roots.push(child);
     });
-    if (found) root = found;
   }
 
   const geometries: THREE.BufferGeometry[] = [];
-  root.traverse((child) => {
-    if (geometries.length >= maxCount) return;
-    const m = child as THREE.Mesh;
-    if (m.isMesh) {
-      const geo = m.geometry.clone();
-      geo.applyMatrix4(m.matrixWorld);
-      geometries.push(geo);
-    }
-  });
+  const visitedMeshes = new Set<THREE.Mesh>();
+  for (const root of roots.length ? roots : [scene]) {
+    root.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (geometries.length >= maxCount || !mesh.isMesh || visitedMeshes.has(mesh)) return;
+      visitedMeshes.add(mesh);
+      const geometry = mesh.geometry.clone();
+      geometry.applyMatrix4(mesh.matrixWorld);
+      geometries.push(geometry);
+    });
+  }
 
   if (geometries.length === 0) return [];
 
@@ -293,9 +287,7 @@ export function extractSubmeshes(
   const center = new THREE.Vector3();
   combinedBox.getCenter(center);
 
-  const longestAxis =
-    size.x >= size.y && size.x >= size.z ? "x" :
-    size.y >= size.z ? "y" : "z";
+  const longestAxis = size.x >= size.y && size.x >= size.z ? "x" : size.y >= size.z ? "y" : "z";
 
   const alignRot = new THREE.Matrix4();
   if (longestAxis === "x") alignRot.makeRotationY(-Math.PI / 2);
@@ -320,6 +312,69 @@ export function extractSubmeshes(
   for (const geo of geometries) geo.scale(scaleK, scaleK, scaleK);
 
   return geometries;
+}
+
+export type MaterialSubmesh = {
+  geometry: THREE.BufferGeometry;
+  materialName: string;
+};
+
+/**
+ * Extracts all scene meshes while preserving their source material names.
+ * Geometry is normalized as one craft so separately rendered details stay
+ * aligned when used by InstancedMesh.
+ */
+export function extractMaterialSubmeshes(
+  scene: THREE.Object3D,
+  targetSize: number,
+): MaterialSubmesh[] {
+  scene.updateMatrixWorld(true);
+
+  const parts: MaterialSubmesh[] = [];
+  scene.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+
+    const geometry = mesh.geometry.clone();
+    geometry.applyMatrix4(mesh.matrixWorld);
+    const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+    parts.push({ geometry, materialName: material.name.toLowerCase() });
+  });
+
+  if (parts.length === 0) return [];
+
+  const combinedBox = new THREE.Box3();
+  for (const { geometry } of parts) {
+    geometry.computeBoundingBox();
+    combinedBox.union(geometry.boundingBox!);
+  }
+
+  const size = new THREE.Vector3();
+  combinedBox.getSize(size);
+  const center = new THREE.Vector3();
+  combinedBox.getCenter(center);
+  const longestAxis = size.x >= size.y && size.x >= size.z ? "x" : size.y >= size.z ? "y" : "z";
+
+  const alignRot = new THREE.Matrix4();
+  if (longestAxis === "x") alignRot.makeRotationY(-Math.PI / 2);
+  else if (longestAxis === "y") alignRot.makeRotationX(Math.PI / 2);
+
+  for (const { geometry } of parts) {
+    geometry.translate(-center.x, -center.y, -center.z);
+    if (longestAxis !== "z") geometry.applyMatrix4(alignRot);
+  }
+
+  const finalBox = new THREE.Box3();
+  for (const { geometry } of parts) {
+    geometry.computeBoundingBox();
+    finalBox.union(geometry.boundingBox!);
+  }
+  const finalSize = new THREE.Vector3();
+  finalBox.getSize(finalSize);
+  const scale = targetSize / Math.max(finalSize.x, finalSize.y, finalSize.z);
+  for (const { geometry } of parts) geometry.scale(scale, scale, scale);
+
+  return parts;
 }
 
 /**
