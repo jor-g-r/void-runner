@@ -5,6 +5,7 @@ import type { Group } from "three";
 import { useGameStore } from "../stores/gameStore";
 import { extractGroupByName } from "../systems/modelUtils";
 import { createVaporwaveMaterial } from "../systems/vaporwaveMaterial";
+import { createChargeMaterial, updateChargeMaterial } from "../systems/chargeMaterial";
 import { playSfx } from "../systems/audio";
 import { touchInput } from "../systems/touchInput";
 import * as THREE from "three";
@@ -22,7 +23,10 @@ const DOUBLE_TAP_WINDOW = 0.3;
 const PLAYER_MODEL_ROTATION: [number, number, number] = [0, Math.PI, 0];
 const LEFT_MUZZLE = new THREE.Vector3(-0.06, -0.06, 0.82);
 const RIGHT_MUZZLE = new THREE.Vector3(0.06, -0.06, 0.82);
-const CHARGED_MUZZLE = new THREE.Vector3(0, -0.06, 0.9);
+const CHARGED_MUZZLE = new THREE.Vector3(0, -0.06, 1.5);
+const CHARGED_GLOW_POSITION = CHARGED_MUZZLE.clone().applyEuler(
+  new THREE.Euler(...PLAYER_MODEL_ROTATION),
+);
 
 const keys = new Set<string>();
 
@@ -65,6 +69,7 @@ export const Player = () => {
   // Each submesh gets a different palette entry so parts (cockpit, wings,
   // fuselage, engines) keep distinct identity instead of a single flat tone.
   const gltf = useLoader(GLTFLoader, "/models/crafts/scene.gltf");
+  const chargeMaterial = useMemo(() => createChargeMaterial(false), []);
   const playerModel = useMemo(() => {
     const group = extractGroupByName(gltf.scene, "craft1", 2.0);
     if (!group) return null;
@@ -148,6 +153,7 @@ export const Player = () => {
   }, [startBarrelRoll, fireCharged]);
 
   useFrame((state, rawDelta) => {
+    updateChargeMaterial(chargeMaterial, state.clock.elapsedTime, chargeLevel);
     if (phase !== "playing" || !groupRef.current) return;
     const delta = Math.min(rawDelta, 0.1);
     const gameState = useGameStore.getState();
@@ -275,16 +281,9 @@ export const Player = () => {
 
       {/* Charge glow */}
       {chargeLevel > 0 && (
-        <mesh position={[0, 0, -0.3]} scale={0.3 + chargeLevel * 0.8}>
-          <sphereGeometry args={[0.5, 10, 10]} />
-          <meshStandardMaterial
-            color="#aaffff"
-            emissive="#00ffff"
-            emissiveIntensity={chargeLevel * 6}
-            transparent
-            opacity={0.3 + chargeLevel * 0.4}
-            toneMapped={false}
-          />
+        <mesh position={CHARGED_GLOW_POSITION} scale={0.3 + chargeLevel * 0.8}>
+          <sphereGeometry args={[0.5, 24, 24]} />
+          <primitive object={chargeMaterial} attach="material" />
         </mesh>
       )}
     </group>

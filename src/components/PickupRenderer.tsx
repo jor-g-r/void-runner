@@ -1,7 +1,8 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { InstancedMesh, Object3D } from "three";
+import { InstancedMesh, Object3D, OctahedronGeometry } from "three";
 import { useGameStore } from "../stores/gameStore";
+import { createVaporwaveMaterial, updateVaporwaveTime } from "../systems/vaporwaveMaterial";
 
 const DUMMY = new Object3D();
 const MAX_PICKUPS = 30;
@@ -13,20 +14,37 @@ const COLLECT_RADIUS = 1.5;
 
 export const PickupRenderer = () => {
   const meshRef = useRef<InstancedMesh>(null);
+  const material = useMemo(
+    () =>
+      createVaporwaveMaterial({
+        baseColor: "#6a4008",
+        facetTintX: "#ffb300",
+        facetTintY: "#fff45f",
+        facetTintZ: "#e36b00",
+        emissiveIntensity: 2.0,
+        scanSpeed: 0.55,
+        fresnelPower: 1.6,
+      }),
+    [],
+  );
+  const geometry = useMemo(() => {
+    const octahedron = new OctahedronGeometry(0.5, 0).toNonIndexed();
+    octahedron.computeVertexNormals();
+    return octahedron;
+  }, []);
   const bobPhases = useRef<number[]>(
-    Array.from({ length: MAX_PICKUPS }, () => Math.random() * Math.PI * 2),
+    Array.from({ length: MAX_PICKUPS }, (_, index) => (index / MAX_PICKUPS) * Math.PI * 2),
   );
 
   useFrame((_state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.1);
+    updateVaporwaveTime(_state.clock.elapsedTime);
     const gameState = useGameStore.getState();
     if (!meshRef.current) return;
 
     const pickups = gameState.pickups;
     const [px, py] = gameState.playerPosition;
-    const magnetR = gameState.upgrades.includes("magnet")
-      ? MAGNET_RADIUS_UPGRADED
-      : MAGNET_RADIUS;
+    const magnetR = gameState.upgrades.includes("magnet") ? MAGNET_RADIUS_UPGRADED : MAGNET_RADIUS;
 
     const toCollect: string[] = [];
 
@@ -58,7 +76,10 @@ export const PickupRenderer = () => {
 
         const bobY = Math.sin(bobPhases.current[i]) * 0.15;
         DUMMY.position.set(p.position[0], p.position[1] + bobY, p.position[2]);
-        DUMMY.rotation.y += delta * 2;
+        DUMMY.rotation.set(0, bobPhases.current[i], 0);
+        DUMMY.scale.multiplyScalar(
+          1 + Math.sin(_state.clock.elapsedTime * 4 + bobPhases.current[i]) * 0.08,
+        );
       } else {
         DUMMY.scale.set(0, 0, 0);
       }
@@ -75,13 +96,8 @@ export const PickupRenderer = () => {
 
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, MAX_PICKUPS]}>
-      <octahedronGeometry args={[0.25, 0]} />
-      <meshStandardMaterial
-        color="#44ff88"
-        emissive="#22ff66"
-        emissiveIntensity={2}
-        toneMapped={false}
-      />
+      <primitive object={geometry} attach="geometry" />
+      <primitive object={material} attach="material" />
     </instancedMesh>
   );
 };

@@ -1,30 +1,44 @@
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { InstancedMesh, Object3D } from "three";
 import { useGameStore } from "../stores/gameStore";
 import { checkCollision } from "../systems/collisions";
+import { playSfx } from "../systems/audio";
 import type { AsteroidData } from "../types";
+import { Explosion } from "./Explosion";
 
 const DUMMY = new Object3D();
-const MAX_ASTEROIDS = 10;
+const MAX_ASTEROIDS = 12;
 const PLAYER_RADIUS = 0.6;
+const ASTEROID_PICKUP_DROP_CHANCE = 0.1;
 
 let nextAsteroidId = 0;
+let nextExplosionId = 0;
+
+interface ExplosionInstance {
+  id: string;
+  position: [number, number, number];
+}
 
 // Spawn times during the level (seconds). Aligned to the wave-timeline beats:
 // intro is 0–15s, so the first rocks arrive during the warm-up.
 const ASTEROID_SPAWNS = [
   { time: 22, count: 2 },
-  { time: 48, count: 3 },
+  { time: 48, count: 4 },
   { time: 72, count: 2 },
-  { time: 98, count: 4 },
-  { time: 128, count: 3 },
+  { time: 98, count: 5 },
+  { time: 128, count: 4 },
 ];
 
 export const AsteroidManager = () => {
   const meshRef = useRef<InstancedMesh>(null);
   const spawnIndex = useRef(0);
   const lastResetTime = useRef(-1);
+  const [explosions, setExplosions] = useState<ExplosionInstance[]>([]);
+
+  const removeExplosion = useCallback((id: string) => {
+    setExplosions((current) => current.filter((explosion) => explosion.id !== id));
+  }, []);
 
   useFrame((_state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.1);
@@ -35,6 +49,7 @@ export const AsteroidManager = () => {
     if (state.time < 1 && lastResetTime.current !== 0) {
       spawnIndex.current = 0;
       nextAsteroidId = 0;
+      nextExplosionId = 0;
       lastResetTime.current = 0;
     }
 
@@ -76,6 +91,7 @@ export const AsteroidManager = () => {
 
     // --- Update asteroids ---
     const updated: AsteroidData[] = [];
+    const destroyed: [number, number, number][] = [];
     for (const a of asteroids) {
       const newPos: [number, number, number] = [
         a.position[0] + a.velocity[0] * delta,
@@ -97,6 +113,17 @@ export const AsteroidManager = () => {
         continue; // Remove asteroid on hit
       }
 
+      const chargedHit = state.playerProjectiles.some(
+        (projectile) =>
+          projectile.isCharged &&
+          checkCollision(projectile.position, projectile.radius ?? 1.5, newPos, a.radius),
+      );
+      if (chargedHit) {
+        destroyed.push(newPos);
+        if (Math.random() < ASTEROID_PICKUP_DROP_CHANCE) state.spawnPickup(newPos);
+        continue;
+      }
+
       updated.push({
         ...a,
         position: newPos,
@@ -105,6 +132,18 @@ export const AsteroidManager = () => {
     }
 
     useGameStore.setState({ asteroids: updated });
+
+    if (destroyed.length > 0) {
+      playSfx("explode");
+      state.requestShake(0.04, 0.08);
+      setExplosions((current) => [
+        ...current,
+        ...destroyed.map((position) => ({
+          id: `asteroid-exp-${nextExplosionId++}`,
+          position,
+        })),
+      ]);
+    }
 
     // --- Render ---
     if (!meshRef.current) return;
@@ -125,14 +164,23 @@ export const AsteroidManager = () => {
   });
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, MAX_ASTEROIDS]}>
-      <icosahedronGeometry args={[1, 0]} />
-      <meshStandardMaterial
-        color="#665544"
-        emissive="#332211"
-        emissiveIntensity={0.2}
-        roughness={0.9}
-      />
-    </instancedMesh>
+    <>
+      <instancedMesh ref={meshRef} args={[undefined, undefined, MAX_ASTEROIDS]}>
+        <icosahedronGeometry args={[1, 0]} />
+        <meshStandardMaterial
+          color="#665544"
+          emissive="#332211"
+          emissiveIntensity={0.2}
+          roughness={0.9}
+        />
+      </instancedMesh>
+      {explosions.map((explosion) => (
+        <Explosion
+          key={explosion.id}
+          position={explosion.position}
+          onComplete={() => removeExplosion(explosion.id)}
+        />
+      ))}
+    </>
   );
 };
